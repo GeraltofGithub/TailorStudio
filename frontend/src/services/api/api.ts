@@ -1,3 +1,5 @@
+import { BASE_URL } from '../../utils/constants'
+
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 class Api {
@@ -5,16 +7,8 @@ class Api {
   private _csrfToken = ''
 
   private _joinUrl(path: string) {
-    // Always same-origin, but in production we must proxy through Vercel serverless
-    // to keep auth cookies first-party.
-    //
-    // Local dev: Vite proxies /api to backend directly.
-    // Production: call /api/_proxy/... explicitly (do NOT rely on vercel.json rewrites).
-    if (!path.startsWith('/')) return path
-    if (import.meta.env.DEV) return path
-    if (path === '/login' || path === '/logout') return `/api/_proxy${path}`
-    if (path.startsWith('/api/')) return `/api/_proxy${path}`
-    return path
+    if (!BASE_URL) return path
+    return `${BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`
   }
 
   private async _ensureCsrfToken() {

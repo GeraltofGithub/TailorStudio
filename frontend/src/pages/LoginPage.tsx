@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
+import { BASE_URL } from '../utils/constants'
 
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
@@ -33,10 +34,7 @@ export default memo(function LoginPage() {
             const fd = new FormData(e.currentTarget)
             const username = String(fd.get('username') || '')
             const password = String(fd.get('password') || '')
-            // Vercel serverless functions only run under /api/*.
-            // - Local dev: use /login (Vite proxy)
-            // - Production: use /api/_proxy/login (Vercel proxy function)
-            const url = import.meta.env.DEV ? `/login` : `/api/_proxy/login`
+            const url = `${BASE_URL || ''}/login`
             try {
               const body = new URLSearchParams()
               body.set('username', username)
@@ -51,7 +49,7 @@ export default memo(function LoginPage() {
 
               // Spring Security responds with redirects on success/failure.
               // The most robust check (dev + prod) is to ask /api/me after the POST.
-              const meUrl = import.meta.env.DEV ? `/api/me` : `/api/_proxy/api/me`
+              const meUrl = `${BASE_URL || ''}/api/me`
               const me = await fetch(meUrl, { method: 'GET', credentials: 'include', cache: 'no-store' })
               if (me.ok) {
                 try {
