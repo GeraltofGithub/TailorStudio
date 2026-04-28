@@ -1,5 +1,3 @@
-import { BASE_URL } from '../../utils/constants'
-
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 class Api {
@@ -7,8 +5,10 @@ class Api {
   private _csrfToken = ''
 
   private _joinUrl(path: string) {
-    if (!BASE_URL) return path
-    return `${BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`
+    // Always same-origin.
+    // - Local dev: Vite proxies /api, /login, /logout to backend.
+    // - Production (Vercel): serverless proxy handles /api and auth endpoints.
+    return path
   }
 
   private async _ensureCsrfToken() {

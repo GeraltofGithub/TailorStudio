@@ -31,8 +31,10 @@ export default memo(function LoginPage() {
             const fd = new FormData(e.currentTarget)
             const username = String(fd.get('username') || '')
             const password = String(fd.get('password') || '')
-            // Always same-origin. In local dev Vite proxies /login, in prod Vercel proxies /login.
-            const url = `/login`
+            // Vercel serverless functions only run under /api/*.
+            // - Local dev: use /login (Vite proxy)
+            // - Production: use /api/_proxy/login (Vercel proxy function)
+            const url = import.meta.env.DEV ? `/login` : `/api/_proxy/login`
             try {
               const body = new URLSearchParams()
               body.set('username', username)
