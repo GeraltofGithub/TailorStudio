@@ -157,15 +157,26 @@ export default memo(function OrderPage() {
     setWaDate(isoDate(existing.deliveryDate))
   }, [existingOrder])
 
-  const statusRank = useMemo(() => {
-    const s = status || 'PENDING'
+  const rankOfStatus = useCallback((s: Status) => {
     if (s === 'IN_PROGRESS') return 1
     if (s === 'READY') return 2
     if (s === 'DELIVERED') return 3
     return 0
-  }, [status])
+  }, [])
 
-  const isCompleted = !!(oid && status === 'DELIVERED')
+  // Lock progression only based on the LAST SAVED status (existingOrder),
+  // not the current unsaved dropdown choice.
+  const persistedStatus: Status = useMemo(() => {
+    const raw = (existingOrder?.status || 'PENDING') as Status
+    return raw
+  }, [existingOrder?.status])
+
+  const persistedRank = useMemo(() => {
+    if (!oid && !existingOrder) return 0
+    return rankOfStatus(persistedStatus)
+  }, [existingOrder, oid, persistedStatus, rankOfStatus])
+
+  const isCompleted = !!(oid && persistedStatus === 'DELIVERED')
 
   const gatherLines = useCallback(() => {
     const g = garmentType
@@ -324,17 +335,28 @@ export default memo(function OrderPage() {
     }
 
     try {
+      const beforeStatus = existingOrder?.status as Status | undefined
       const data = oid ? await appService.orders.update(oid, body) : await appService.orders.create(body)
       if (!oid && (data as any).id) {
         nav(`/app/order?id=${(data as any).id}`)
-        toast.success('Order saved')
+        toast.success('Order created')
+        const st = (data as any)?.status as Status | undefined
+        if (st === 'IN_PROGRESS') toast.success('Work status: In progress')
+        if (st === 'READY') toast.success('Work status: Ready')
+        if (st === 'DELIVERED') toast.success('Work status: Delivered')
         savingRef.current = false
         return
       }
       setExistingOrder(data)
       setSnapCache(parseSnapFromOrder(data))
       await loadPaymentInfo()
-      toast.success('Order saved')
+      toast.success('Order updated')
+      const afterStatus = (data as any)?.status as Status | undefined
+      if (afterStatus && afterStatus !== beforeStatus) {
+        if (afterStatus === 'IN_PROGRESS') toast.success('Work status: In progress')
+        if (afterStatus === 'READY') toast.success('Work status: Ready')
+        if (afterStatus === 'DELIVERED') toast.success('Work status: Delivered')
+      }
     } catch (e: any) {
       const msg = e?.payload?.message || e?.payload?.error || e?.message
       toast.error(msg ? String(msg) : 'Could not save order. Please try again.')
@@ -348,6 +370,7 @@ export default memo(function OrderPage() {
     deliveryDate,
     garmentType,
     gatherLines,
+    existingOrder?.status,
     isCompleted,
     loadPaymentInfo,
     matNotes,
@@ -472,15 +495,11 @@ export default memo(function OrderPage() {
                     onChange={(e) => {
                       const next = e.target.value as Status
                       setStatus(next)
-                      if (next === 'PENDING') toast.success('Work status: Pending')
-                      if (next === 'IN_PROGRESS') toast.success('Work status: In progress')
-                      if (next === 'READY') toast.success('Work status: Ready')
-                      if (next === 'DELIVERED') toast.success('Work status: Delivered')
                     }}
                   >
                     {(['PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED'] as Status[]).map((s) => {
-                      const r = s === 'PENDING' ? 0 : s === 'IN_PROGRESS' ? 1 : s === 'READY' ? 2 : 3
-                      const disabled = r < statusRank
+                      const r = rankOfStatus(s)
+                      const disabled = r < persistedRank
                       return (
                         <option key={s} value={s} disabled={disabled}>
                           {s.replace(/_/g, ' ')}
