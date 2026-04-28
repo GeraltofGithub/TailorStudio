@@ -11,6 +11,7 @@ export default memo(function LoginPage() {
   const nav = useNavigate()
   const toast = useAppToast()
   const [showPass, setShowPass] = useState(false)
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
     if (!showError) return
@@ -31,6 +32,8 @@ export default memo(function LoginPage() {
           id="login-form"
           onSubmit={async (e) => {
             e.preventDefault()
+            if (pending) return
+            setPending(true)
             const fd = new FormData(e.currentTarget)
             const username = String(fd.get('username') || '')
             const password = String(fd.get('password') || '')
@@ -66,6 +69,8 @@ export default memo(function LoginPage() {
               toast.error('Invalid credentials')
             } catch {
               toast.error('Server error during sign-in. Please retry.')
+            } finally {
+              setPending(false)
             }
           }}
         >
@@ -104,8 +109,8 @@ export default memo(function LoginPage() {
               </button>
             </div>
           </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }}>
-            Sign in
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }} disabled={pending}>
+            {pending ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
         <p className="auth-footer">
