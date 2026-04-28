@@ -1,48 +1,34 @@
 package com.tailorstudio.app.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-@Entity
-@Table(name = "users")
+@Document(collection = "users")
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Indexed(unique = true)
     private String email;
 
-    @Column(nullable = false)
     private String passwordHash;
 
-    @Column(nullable = false)
     private String fullName;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private UserRole role;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "business_id")
+    private Long businessId;
+
+    @Transient
     private Business business;
 
-    @Column(nullable = false)
     private boolean enabled = true;
 
-    @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
     private String inviteNote;
@@ -93,6 +79,15 @@ public class User {
 
     public void setBusiness(Business business) {
         this.business = business;
+        this.businessId = business != null ? business.getId() : null;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
+    }
+
+    public void setBusinessId(Long businessId) {
+        this.businessId = businessId;
     }
 
     public boolean isEnabled() {

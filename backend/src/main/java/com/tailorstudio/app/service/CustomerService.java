@@ -3,6 +3,7 @@ package com.tailorstudio.app.service;
 import com.tailorstudio.app.domain.Customer;
 import com.tailorstudio.app.domain.MeasurementUnit;
 import com.tailorstudio.app.domain.TailorOrder;
+import com.tailorstudio.app.mongo.SequenceService;
 import com.tailorstudio.app.repo.BusinessRepository;
 import com.tailorstudio.app.repo.CustomerRepository;
 import com.tailorstudio.app.repo.TailorOrderRepository;
@@ -17,20 +18,23 @@ public class CustomerService {
     private final CustomerRepository customerRepository;
     private final BusinessRepository businessRepository;
     private final TailorOrderRepository tailorOrderRepository;
+    private final SequenceService seq;
 
     public CustomerService(
             CustomerRepository customerRepository,
             BusinessRepository businessRepository,
-            TailorOrderRepository tailorOrderRepository) {
+            TailorOrderRepository tailorOrderRepository,
+            SequenceService seq) {
         this.customerRepository = customerRepository;
         this.businessRepository = businessRepository;
         this.tailorOrderRepository = tailorOrderRepository;
+        this.seq = seq;
     }
 
     @Transactional(readOnly = true)
     public List<Customer> list(Long businessId, String query) {
         if (query == null || query.isBlank()) {
-            return customerRepository.findByBusiness_IdOrderByNameAsc(businessId);
+            return customerRepository.findByBusinessIdOrderByNameAsc(businessId);
         }
         return customerRepository.search(businessId, query.trim());
     }
@@ -38,7 +42,7 @@ public class CustomerService {
     @Transactional(readOnly = true)
     public Customer get(Long businessId, Long customerId) {
         Customer c = customerRepository.findById(customerId).orElseThrow();
-        if (!c.getBusiness().getId().equals(businessId)) {
+        if (c.getBusinessId() == null || !c.getBusinessId().equals(businessId)) {
             throw new IllegalArgumentException("Not found");
         }
         return c;
@@ -48,7 +52,8 @@ public class CustomerService {
     public Customer create(Long businessId, String name, String phone, String address, MeasurementUnit preferredUnit) {
         var business = businessRepository.findById(businessId).orElseThrow();
         Customer c = new Customer();
-        c.setBusiness(business);
+        c.setId(seq.next("customers"));
+        c.setBusinessId(business.getId());
         c.setName(name);
         c.setPhone(phone);
         c.setAddress(address);
@@ -73,6 +78,6 @@ public class CustomerService {
     @Transactional(readOnly = true)
     public List<TailorOrder> orderHistory(Long businessId, Long customerId) {
         get(businessId, customerId);
-        return tailorOrderRepository.findByBusiness_IdAndCustomer_IdOrderByCreatedAtDesc(businessId, customerId);
+        return tailorOrderRepository.findByBusinessIdAndCustomerIdOrderByCreatedAtDesc(businessId, customerId);
     }
 }

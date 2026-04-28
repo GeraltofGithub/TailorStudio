@@ -1,44 +1,33 @@
 package com.tailorstudio.app.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-@Entity
-@Table(name = "measurements")
+@Document(collection = "measurements")
 @JsonIgnoreProperties(value = {"customer"}, allowSetters = true)
 public class Measurement {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "customer_id")
+    @Indexed
+    private Long customerId;
+
+    @Transient
     private Customer customer;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private GarmentType garmentType;
 
     /**
      * JSON object of field name -> value (numbers as strings for simplicity).
      */
-    @Column(nullable = false, columnDefinition = "CLOB")
     private String dataJson;
 
-    @Column(nullable = false)
     private Instant updatedAt = Instant.now();
 
     public Long getId() {
@@ -55,6 +44,15 @@ public class Measurement {
 
     public void setCustomer(Customer customer) {
         this.customer = customer;
+        this.customerId = customer != null ? customer.getId() : null;
+    }
+
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
     }
 
     public GarmentType getGarmentType() {

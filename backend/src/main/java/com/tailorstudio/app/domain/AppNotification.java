@@ -1,40 +1,32 @@
 package com.tailorstudio.app.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-@Entity
-@Table(name = "notifications")
+@Document(collection = "notifications")
 @JsonIgnoreProperties(value = {"business"}, allowSetters = true)
 public class AppNotification {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "business_id")
+    @Indexed
+    private Long businessId;
+
+    @Transient
     private Business business;
 
-    @Column(nullable = false, length = 500)
     private String message;
 
     private Long orderId;
 
-    @Column(nullable = false)
     private boolean readFlag;
 
-    @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
     public Long getId() {
@@ -51,6 +43,15 @@ public class AppNotification {
 
     public void setBusiness(Business business) {
         this.business = business;
+        this.businessId = business != null ? business.getId() : null;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
+    }
+
+    public void setBusinessId(Long businessId) {
+        this.businessId = businessId;
     }
 
     public String getMessage() {

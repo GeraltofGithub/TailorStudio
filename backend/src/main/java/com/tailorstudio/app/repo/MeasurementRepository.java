@@ -2,14 +2,14 @@ package com.tailorstudio.app.repo;
 
 import com.tailorstudio.app.domain.GarmentType;
 import com.tailorstudio.app.domain.Measurement;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface MeasurementRepository extends JpaRepository<Measurement, Long> {
+public interface MeasurementRepository extends MongoRepository<Measurement, Long> {
 
-    List<Measurement> findByCustomer_IdOrderByGarmentTypeAsc(Long customerId);
+    List<Measurement> findByCustomerIdOrderByGarmentTypeAsc(Long customerId);
 
-    Optional<Measurement> findByCustomer_IdAndGarmentType(Long customerId, GarmentType garmentType);
+    Optional<Measurement> findByCustomerIdAndGarmentType(Long customerId, GarmentType garmentType);
 }
