@@ -1,13 +1,15 @@
-import { memo, useEffect } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAppToast } from '../utils/toast'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
   const showError = sp.get('error') === '1'
   const nav = useNavigate()
   const toast = useAppToast()
+  const [showPass, setShowPass] = useState(false)
 
   useEffect(() => {
     if (!showError) return
@@ -68,7 +70,34 @@ export default memo(function LoginPage() {
           </div>
           <div>
             <label htmlFor="password">Password</label>
-            <input type="password" id="password" name="password" autoComplete="current-password" required />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPass ? 'text' : 'password'}
+                id="password"
+                name="password"
+                autoComplete="current-password"
+                required
+                style={{ paddingRight: '2.4rem' }}
+              />
+              <button
+                type="button"
+                className="ts-icon-btn"
+                aria-label={showPass ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPass((v) => !v)}
+                style={{
+                  position: 'absolute',
+                  right: '0.35rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
           <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }}>
             Sign in
