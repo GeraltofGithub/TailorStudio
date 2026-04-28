@@ -1,47 +1,40 @@
 package com.tailorstudio.app.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.bson.types.ObjectId;
 
 import java.time.Instant;
 
-@Entity
-@Table(name = "customers")
+@Document(collection = "customers")
 @JsonIgnoreProperties(value = {"business"}, allowSetters = true)
 public class Customer {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "business_id")
+    private String mongoObjectId = new ObjectId().toHexString();
+
+    private Long businessId;
+
+    @Transient
     private Business business;
 
-    @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
     private String phone;
 
-    @Column(length = 500)
     private String address;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
     private MeasurementUnit preferredUnit = MeasurementUnit.INCH;
 
-    @Column(nullable = false)
+    /**
+     * Soft-delete flag. Null in older docs should be treated as active=true.
+     */
+    private Boolean active = Boolean.TRUE;
+
     private Instant createdAt = Instant.now();
 
     public Long getId() {
@@ -52,12 +45,29 @@ public class Customer {
         this.id = id;
     }
 
+    public String getMongoObjectId() {
+        return mongoObjectId;
+    }
+
+    public void setMongoObjectId(String mongoObjectId) {
+        this.mongoObjectId = mongoObjectId;
+    }
+
     public Business getBusiness() {
         return business;
     }
 
     public void setBusiness(Business business) {
         this.business = business;
+        this.businessId = business != null ? business.getId() : null;
+    }
+
+    public Long getBusinessId() {
+        return businessId;
+    }
+
+    public void setBusinessId(Long businessId) {
+        this.businessId = businessId;
     }
 
     public String getName() {
@@ -90,6 +100,14 @@ public class Customer {
 
     public void setPreferredUnit(MeasurementUnit preferredUnit) {
         this.preferredUnit = preferredUnit != null ? preferredUnit : MeasurementUnit.INCH;
+    }
+
+    public boolean isActive() {
+        return active == null || active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
     }
 
     public Instant getCreatedAt() {

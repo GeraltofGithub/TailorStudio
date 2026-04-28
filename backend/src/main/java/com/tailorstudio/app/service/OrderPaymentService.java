@@ -122,7 +122,7 @@ public class OrderPaymentService {
 
     private TailorOrder requireOrder(Long businessId, Long orderId) {
         TailorOrder order =
-                orderRepository.findByIdAndBusiness_Id(orderId, businessId).orElseThrow();
+                orderRepository.findByIdAndBusinessId(orderId, businessId).orElseThrow();
         return order;
     }
 
