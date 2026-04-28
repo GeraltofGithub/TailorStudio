@@ -11,7 +11,7 @@
  * (Fallback: VITE_API_BASE_URL is also accepted, but BACKEND_URL is preferred.)
  */
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const base = (process.env.BACKEND_URL || process.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
   if (!base) {
     res.statusCode = 500
