@@ -885,6 +885,50 @@ table.data tr:hover td {
   letter-spacing: 0.12em;
 }
 
+/* Pagination (Prev 1 2 Next) */
+.ts-pagination {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+  padding: 1.25rem 0 0.25rem;
+}
+.ts-page-btn {
+  appearance: none;
+  border: 1px solid #ef4444;
+  background: transparent;
+  color: #ef4444;
+  padding: 0.55rem 1.2rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ts-page-btn.is-active {
+  background: #ef4444;
+  color: #ffffff;
+}
+.ts-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* icon-only actions: no box/shadow */
+.ts-icon-btn {
+  padding: 0.35rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: none !important;
+}
+.ts-icon-btn:hover,
+.ts-icon-btn:focus,
+.ts-icon-btn:active {
+  box-shadow: none !important;
+}
+
 .receipt-notes {
   font-size: 0.85rem;
   color: #2a241c;
@@ -914,6 +958,12 @@ table.data tr:hover td {
 }
 .pay-modal-body {
   padding: 1.25rem 1.35rem 1.1rem;
+}
+
+.req-star {
+  color: #ef4444;
+  margin-left: 0.25rem;
+  font-weight: 800;
 }
 .wa-demo-box {
   background: var(--bg-elevated);

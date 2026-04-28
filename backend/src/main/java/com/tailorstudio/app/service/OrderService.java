@@ -71,6 +71,9 @@ public class OrderService {
 
         TailorOrder order = new TailorOrder();
         order.setId(seq.next("orders"));
+        if (order.getMongoObjectId() == null || order.getMongoObjectId().isBlank()) {
+            order.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
+        }
         order.setBusinessId(business.getId());
         order.setSerialNumber(serial);
         order.setCustomerId(customer.getId());

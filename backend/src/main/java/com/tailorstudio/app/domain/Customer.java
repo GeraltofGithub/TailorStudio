@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.bson.types.ObjectId;
 
 import java.time.Instant;
 
@@ -13,6 +14,8 @@ public class Customer {
 
     @Id
     private Long id;
+
+    private String mongoObjectId = new ObjectId().toHexString();
 
     private Long businessId;
 
@@ -27,6 +30,11 @@ public class Customer {
 
     private MeasurementUnit preferredUnit = MeasurementUnit.INCH;
 
+    /**
+     * Soft-delete flag. Null in older docs should be treated as active=true.
+     */
+    private Boolean active = Boolean.TRUE;
+
     private Instant createdAt = Instant.now();
 
     public Long getId() {
@@ -35,6 +43,14 @@ public class Customer {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getMongoObjectId() {
+        return mongoObjectId;
+    }
+
+    public void setMongoObjectId(String mongoObjectId) {
+        this.mongoObjectId = mongoObjectId;
     }
 
     public Business getBusiness() {
@@ -84,6 +100,14 @@ public class Customer {
 
     public void setPreferredUnit(MeasurementUnit preferredUnit) {
         this.preferredUnit = preferredUnit != null ? preferredUnit : MeasurementUnit.INCH;
+    }
+
+    public boolean isActive() {
+        return active == null || active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
     }
 
     public Instant getCreatedAt() {

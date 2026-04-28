@@ -45,6 +45,9 @@ public class AuthService {
         }
         Business b = new Business();
         b.setId(seq.next("businesses"));
+        if (b.getMongoObjectId() == null || b.getMongoObjectId().isBlank()) {
+            b.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
+        }
         b.setName(businessName);
         b.setTagline(tagline);
         b.setAddress(address);
@@ -55,6 +58,9 @@ public class AuthService {
 
         User u = new User();
         u.setId(seq.next("users"));
+        if (u.getMongoObjectId() == null || u.getMongoObjectId().isBlank()) {
+            u.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
+        }
         u.setEmail(email.trim().toLowerCase());
         u.setPasswordHash(passwordEncoder.encode(rawPassword));
         u.setFullName(ownerName);
@@ -72,6 +78,9 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid studio code"));
         User u = new User();
         u.setId(seq.next("users"));
+        if (u.getMongoObjectId() == null || u.getMongoObjectId().isBlank()) {
+            u.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
+        }
         u.setEmail(email.trim().toLowerCase());
         u.setPasswordHash(passwordEncoder.encode(rawPassword));
         u.setFullName(fullName);

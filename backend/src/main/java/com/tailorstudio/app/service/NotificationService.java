@@ -54,6 +54,9 @@ public class NotificationService {
     public void add(Business business, String message, Long orderId) {
         AppNotification n = new AppNotification();
         n.setId(seq.next("notifications"));
+        if (n.getMongoObjectId() == null || n.getMongoObjectId().isBlank()) {
+            n.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
+        }
         n.setBusinessId(business != null ? business.getId() : null);
         n.setMessage(message);
         n.setOrderId(orderId);

@@ -6,5 +6,7 @@ import java.util.List;
 
 public interface CustomerRepositoryCustom {
     List<Customer> search(Long businessId, String q);
+
+    List<Customer> searchActive(Long businessId, String q);
 }
 

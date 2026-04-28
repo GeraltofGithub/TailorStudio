@@ -11,5 +11,5 @@ public interface MeasurementRepository extends MongoRepository<Measurement, Long
 
     List<Measurement> findByCustomerIdOrderByGarmentTypeAsc(Long customerId);
 
-    Optional<Measurement> findByCustomerIdAndGarmentType(Long customerId, GarmentType garmentType);
+    Optional<Measurement> findFirstByCustomerIdAndGarmentTypeOrderByUpdatedAtDesc(Long customerId, GarmentType garmentType);
 }

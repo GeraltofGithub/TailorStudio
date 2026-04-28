@@ -65,8 +65,19 @@ export const ToastItem = memo(function ToastItem(props: {
             )}
           </div>
 
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '0.95rem', fontWeight: 650, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontSize: '0.95rem',
+                fontWeight: 650,
+                lineHeight: 1.25,
+                whiteSpace: 'normal',
+                overflowWrap: 'anywhere',
+                maxHeight: 72,
+                overflow: 'auto',
+                paddingRight: 2,
+              }}
+            >
               {message}
             </div>
           </div>
