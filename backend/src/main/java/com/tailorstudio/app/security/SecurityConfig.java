@@ -18,8 +18,10 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.beans.factory.annotation.Value;
 
 import static org.springframework.security.web.util.matcher.AntPathRequestMatcher.antMatcher;
 
@@ -28,10 +30,19 @@ import static org.springframework.security.web.util.matcher.AntPathRequestMatche
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    @Value("${app.cookies.same-site:${COOKIE_SAMESITE:lax}}")
+    private String cookieSameSite;
+
+    @Value("${app.cookies.secure:${COOKIE_SECURE:false}}")
+    private boolean cookieSecure;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource) throws Exception {
         CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepo.setCookiePath("/");
+        csrfRepo.setCookieCustomizer(c -> c
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite));
         // Spring Security 6 defaults CsrfFilter to XorCsrfTokenRequestAttributeHandler; the cookie value is then
         // XOR-masked and no longer matches what JS reads and sends in X-XSRF-TOKEN. Use the plain handler so
         // CookieCsrfTokenRepository + fetch() headers work for same-origin SPA calls.
@@ -107,6 +118,9 @@ public class SecurityConfig {
                             response.setContentType(MediaType.TEXT_PLAIN_VALUE);
                             response.getWriter().write("Forbidden");
                         }));
+
+        // Expose CSRF token via response header for cross-origin SPAs (Vercel + Render).
+        http.addFilterAfter(new CsrfHeaderFilter(), CsrfFilter.class);
 
         return http.build();
     }

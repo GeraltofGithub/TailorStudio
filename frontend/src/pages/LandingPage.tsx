@@ -30,7 +30,7 @@ export default memo(function LandingPage() {
 
       <section className="hero">
         <div>
-          <div className="hero-badge">MVP demo · Spring Boot + H2</div>
+          <div className="hero-badge">Welcome</div>
           <h1>Measurements, orders, and bills — without the paper pile.</h1>
           <p className="lead">
             Each tailor business gets its own workspace. Owners onboard the team with a join code. Staff and owners see the same orders, customers, and
@@ -90,7 +90,7 @@ export default memo(function LandingPage() {
         </div>
       </section>
 
-      <footer className="landing-footer">Tailor Studio — local demo · H2 embedded · session login</footer>
+      <footer className="landing-footer">Tailor Studio</footer>
     </div>
   )
 })

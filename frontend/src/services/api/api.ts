@@ -1,48 +1,39 @@
-import Cookies from 'js-cookie'
-
 import { BASE_URL } from '../../utils/constants'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 class Api {
   private _csrfPrimed = false
+  private _csrfToken = ''
 
   private _joinUrl(path: string) {
     if (!BASE_URL) return path
     return `${BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`
   }
 
-  private async _ensureCsrfCookie() {
-    const existing = Cookies.get('XSRF-TOKEN')
-    if (existing) {
+  private async _ensureCsrfToken() {
+    if (this._csrfToken) {
       this._csrfPrimed = true
-      return existing
+      return this._csrfToken
     }
-    // Spring issues CSRF token cookie on (some) GETs; touch a backend endpoint first.
     try {
-      await fetch(this._joinUrl('/api/me'), { method: 'GET', credentials: 'include', cache: 'no-store' })
-    } catch {
-      // ignore
-    }
-    // Cookie set via Set-Cookie can be visible slightly after the fetch resolves.
-    for (let i = 0; i < 8; i++) {
-      const t = Cookies.get('XSRF-TOKEN')
+      const r = await fetch(this._joinUrl('/api/me'), { method: 'GET', credentials: 'include', cache: 'no-store' })
+      const t = r.headers.get('x-xsrf-token') || r.headers.get('X-XSRF-TOKEN') || ''
       if (t) {
+        this._csrfToken = t
         this._csrfPrimed = true
         return t
       }
-      await new Promise((r) => window.setTimeout(r, 25))
+    } catch {
+      // ignore
     }
-    const t = Cookies.get('XSRF-TOKEN') || ''
-    if (t) this._csrfPrimed = true
-    return t
+    return this._csrfToken
   }
 
   private _csrfHeaders(contentType: string) {
-    const t = Cookies.get('XSRF-TOKEN')
     const h: Record<string, string> = { Accept: 'application/json' }
     if (contentType) h['Content-Type'] = contentType
-    if (t) h['X-XSRF-TOKEN'] = t
+    if (this._csrfToken) h['X-XSRF-TOKEN'] = this._csrfToken
     return h
   }
 
@@ -52,7 +43,7 @@ class Api {
     const isWrite = method !== 'GET'
 
     // Prime CSRF once before the first write, so the very first POST/PUT/PATCH/DELETE never fails.
-    if (isWrite && !this._csrfPrimed) await this._ensureCsrfCookie()
+    if (isWrite && !this._csrfPrimed) await this._ensureCsrfToken()
 
     const doFetch = async () =>
       fetch(this._joinUrl(url), {
@@ -65,11 +56,17 @@ class Api {
 
     let r = await doFetch()
 
+    const nextToken = r.headers.get('x-xsrf-token') || r.headers.get('X-XSRF-TOKEN') || ''
+    if (nextToken) {
+      this._csrfToken = nextToken
+      this._csrfPrimed = true
+    }
+
     // If CSRF cookie was missing/stale, Spring returns 403 and also sets XSRF-TOKEN cookie.
     // Retry once after ensuring the cookie exists.
     if (isWrite && r.status === 403) {
       this._csrfPrimed = false
-      await this._ensureCsrfCookie()
+      await this._ensureCsrfToken()
       r = await doFetch()
     }
 

@@ -1,20 +1,14 @@
-import Cookies from 'js-cookie'
-import { memo, useEffect, useMemo } from 'react'
+import { memo, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useAppToast } from '../utils/toast'
+import { BASE_URL } from '../utils/constants'
 
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
   const showError = sp.get('error') === '1'
-  const csrf = Cookies.get('XSRF-TOKEN') || ''
   const nav = useNavigate()
   const toast = useAppToast()
-
-  // Keep this relative so Vite proxy handles it in local dev.
-  // If you set VITE_API_BASE_URL to localhost:8081, the browser would POST directly to 8081
-  // and then follow Spring's default redirect to /app/dashboard.html on the backend.
-  const action = useMemo(() => `/login`, [])
 
   useEffect(() => {
     if (!showError) return
@@ -32,19 +26,40 @@ export default memo(function LoginPage() {
           Sign-in failed. Check your email and password, then try again.
         </div>
         <form
-          method="post"
-          action={action}
           id="login-form"
-          onSubmit={() => {
-            // Show toast once after successful auth redirect.
+          onSubmit={async (e) => {
+            e.preventDefault()
+            const fd = new FormData(e.currentTarget)
+            const username = String(fd.get('username') || '')
+            const password = String(fd.get('password') || '')
+            const url = `${BASE_URL || ''}/login`
             try {
-              sessionStorage.setItem('ts_login_success', '1')
+              const body = new URLSearchParams()
+              body.set('username', username)
+              body.set('password', password)
+              // CSRF is ignored for POST /login in backend config.
+              const r = await fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                redirect: 'manual',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body,
+              })
+              if (r.status >= 200 && r.status < 400) {
+                try {
+                  sessionStorage.setItem('ts_login_success', '1')
+                } catch {
+                  // ignore
+                }
+                nav('/app/dashboard', { replace: true })
+                return
+              }
+              toast.error('Invalid credentials')
             } catch {
-              // ignore
+              toast.error('Server error during sign-in. Please retry.')
             }
           }}
         >
-          <input type="hidden" name="_csrf" id="_csrf" value={csrf} />
           <div>
             <label htmlFor="username">Email</label>
             <input type="email" id="username" name="username" autoComplete="username" required />
