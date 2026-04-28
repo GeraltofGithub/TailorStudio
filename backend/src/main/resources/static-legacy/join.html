@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Join studio — Tailor Studio</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <div class="auth-page">
+      <div class="auth-card">
+        <h1>Join your studio</h1>
+        <p class="sub">Ask the owner for the join code, then create your staff account.</p>
+        <div id="msg"></div>
+        <form id="f">
+          <div>
+            <label for="joinCode">Studio join code</label>
+            <input id="joinCode" required minlength="8" maxlength="64" autocomplete="off" class="join-code-box" style="text-align: left" placeholder="e.g. A1B2C3D4" />
+          </div>
+          <div>
+            <label for="fullName">Your name</label>
+            <input id="fullName" required maxlength="120" />
+          </div>
+          <div>
+            <label for="email">Email (login)</label>
+            <input type="email" id="email" required autocomplete="email" />
+          </div>
+          <div>
+            <label for="password">Password (min 8)</label>
+            <input type="password" id="password" required minlength="8" maxlength="100" autocomplete="new-password" />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%">Join studio</button>
+        </form>
+        <p class="auth-footer"><a href="/login.html">Sign in</a> · <a href="/signup.html">Create a new studio</a></p>
+      </div>
+    </div>
+    <script src="/js/api.js"></script>
+    <script>
+      document.getElementById('f').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var msg = document.getElementById('msg');
+        msg.innerHTML = '';
+        var body = {
+          joinCode: document.getElementById('joinCode').value.trim(),
+          fullName: document.getElementById('fullName').value.trim(),
+          email: document.getElementById('email').value.trim(),
+          password: document.getElementById('password').value,
+        };
+        var res = await TSApi.postJson('/api/auth/staff-signup', body);
+        var data = await res.json().catch(function () {
+          return {};
+        });
+        if (res.ok) {
+          msg.innerHTML = '<div class="alert alert-success">' + (data.message || 'Joined.') + '</div>';
+          setTimeout(function () {
+            window.location.href = '/login.html';
+          }, 900);
+        } else {
+          msg.innerHTML = '<div class="alert alert-error">' + (data.error || 'Could not join') + '</div>';
+        }
+      });
+    </script>
+  </body>
+</html>

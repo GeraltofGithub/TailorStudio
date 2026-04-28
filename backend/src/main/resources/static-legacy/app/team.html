@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Team — Tailor Studio</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <script src="/js/api.js"></script>
+    <script src="/js/shell.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', async function () {
+        await TSShell.mount('team', 'Team & join code', async function (me) {
+          var tr = await TSApi.get('/api/team');
+          var team = await tr.json();
+          var rows = team
+            .map(function (u) {
+              return (
+                '<tr><td>' +
+                TSShell.escapeHtml(u.fullName) +
+                '</td><td>' +
+                TSShell.escapeHtml(u.email) +
+                '</td><td><span class="badge badge-ready">' +
+                TSShell.escapeHtml(u.role) +
+                '</span></td><td style="font-size:0.85rem;color:var(--muted)">' +
+                TSShell.escapeHtml((u.createdAt || '').slice(0, 10)) +
+                '</td></tr>'
+              );
+            })
+            .join('');
+
+          var ownerPanel = '';
+          if (me.role === 'OWNER') {
+            ownerPanel =
+              '<div class="panel" style="margin-bottom:1.25rem">' +
+              '<div class="panel-header"><h2>Invite staff</h2></div>' +
+              '<div style="padding:1.25rem">' +
+              '<p style="margin:0 0 1rem; color:var(--muted); max-width:52ch">Share this code with cutters and tailors. They use <a href="/join.html">Join with a code</a> to create an account linked to <strong>' +
+              TSShell.escapeHtml(me.businessName) +
+              '</strong>. Rotate the code anytime old invites should stop working.</p>' +
+              '<div class="join-code-box" id="jc">' +
+              TSShell.escapeHtml(me.joinCode || '—') +
+              '</div>' +
+              '<div style="margin-top:1rem"><button type="button" class="btn btn-teal" id="rot">Generate new code</button></div>' +
+              '<p id="rot-msg" style="margin-top:0.75rem;font-size:0.88rem;color:var(--muted)"></p>' +
+              '</div></div>';
+          } else {
+            ownerPanel =
+              '<div class="panel" style="margin-bottom:1.25rem"><div style="padding:1.25rem;color:var(--muted)">Only the studio owner can view or rotate the join code. Ask them to invite new staff.</div></div>';
+          }
+
+          return (
+            ownerPanel +
+            '<div class="panel"><div class="panel-header"><h2>People in this studio</h2></div>' +
+            '<div class="table-wrap"><table class="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Since</th></tr></thead><tbody>' +
+            (rows || '<tr><td colspan="4">No team members.</td></tr>') +
+            '</tbody></table></div></div>'
+          );
+        });
+
+        var meR = await TSApi.get('/api/me');
+        var me = await meR.json();
+        if (me.role === 'OWNER') {
+          var rot = document.getElementById('rot');
+          if (rot)
+            rot.onclick = async function () {
+              var res = await TSApi.post('/api/business/rotate-join-code');
+              var data = await res.json();
+              if (res.ok) {
+                document.getElementById('jc').textContent = data.joinCode;
+                document.getElementById('rot-msg').textContent = 'New code generated. Share it with new staff only.';
+              } else document.getElementById('rot-msg').textContent = 'Could not rotate.';
+            };
+        }
+      });
+    </script>
+  </body>
+</html>

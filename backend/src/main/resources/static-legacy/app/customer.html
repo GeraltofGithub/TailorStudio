@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Customer — Tailor Studio</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <script src="/js/api.js"></script>
+    <script src="/js/shell.js"></script>
+    <script>
+      var GARMENTS = ['SHIRT', 'PANT', 'BLOUSE', 'SUIT'];
+      var templates = {};
+
+      function parseId() {
+        var p = new URLSearchParams(window.location.search).get('id');
+        return p ? parseInt(p, 10) : null;
+      }
+
+      function groupFields(fields) {
+        var by = {};
+        (fields || []).forEach(function (f) {
+          var g = f.group || 'Measurements';
+          if (!by[g]) by[g] = [];
+          by[g].push(f);
+        });
+        return by;
+      }
+
+      function renderMeasureEditor(garment, payload, fields, radioPrefix) {
+        var rp = radioPrefix || 'u-';
+        var unit = (payload && payload.unit) || 'INCH';
+        var vals = (payload && payload.values) || {};
+        var groups = groupFields(fields);
+        var groupNames = Object.keys(groups);
+        var unitHtml =
+          '<div class="unit-toggle">' +
+          '<span style="font-size:0.78rem;text-transform:uppercase;color:var(--muted)">Unit</span>' +
+          '<label><input type="radio" name="' +
+          rp +
+          garment +
+          '" value="INCH" ' +
+          (unit === 'INCH' ? 'checked' : '') +
+          ' /> in</label>' +
+          '<label><input type="radio" name="' +
+          rp +
+          garment +
+          '" value="CM" ' +
+          (unit === 'CM' ? 'checked' : '') +
+          ' /> cm</label>' +
+          '</div>';
+        var blocks = groupNames
+          .map(function (gn) {
+            var rows = groups[gn]
+              .map(function (f) {
+                var v = vals[f.key] != null ? String(vals[f.key]) : '';
+                return (
+                  '<div><label>' +
+                  TSShell.escapeHtml(f.label) +
+                  '</label>' +
+                  (f.hint ? '<p class="field-hint">' + TSShell.escapeHtml(f.hint) + '</p>' : '') +
+                  '<input type="text" inputmode="decimal" data-k="' +
+                  f.key +
+                  '" value="' +
+                  TSShell.escapeHtml(v) +
+                  '" placeholder="—" /></div>'
+                );
+              })
+              .join('');
+            return '<div class="measurement-group-title">' + TSShell.escapeHtml(gn) + '</div><div class="form-grid two">' + rows + '</div>';
+          })
+          .join('');
+        return unitHtml + blocks;
+      }
+
+      function parsePayloadJson(dataJsonStr) {
+        try {
+          var o = JSON.parse(dataJsonStr || '{}');
+          if (o.unit && o.values) return { unit: o.unit, values: o.values || {} };
+          return { unit: 'INCH', values: o && typeof o === 'object' ? o : {} };
+        } catch (e) {
+          return { unit: 'INCH', values: {} };
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', async function () {
+        var me = await TSShell.requireAuth();
+        if (!me) return;
+
+        var cid = parseId();
+        var tmplRes = await TSApi.get('/api/measurement-templates');
+        templates = tmplRes.ok ? await tmplRes.json() : {};
+
+        var newMeasureDraft = {};
+        var currentNewGarment = 'SHIRT';
+        GARMENTS.forEach(function (g) {
+          newMeasureDraft[g] = { unit: 'INCH', values: {} };
+        });
+
+        function syncNewTabToDraft(g) {
+          var root = document.getElementById('new-tab-body');
+          if (!root || !g) return;
+          var unitEl = document.querySelector('input[name="nu-' + g + '"]:checked');
+          var unit = unitEl ? unitEl.value : 'INCH';
+          var values = {};
+          root.querySelectorAll('input[data-k]').forEach(function (inp) {
+            values[inp.getAttribute('data-k')] = inp.value;
+          });
+          newMeasureDraft[g] = { unit: unit, values: values };
+        }
+
+        function renderNewCustomerMeasureTab(g) {
+          if (currentNewGarment && currentNewGarment !== g) syncNewTabToDraft(currentNewGarment);
+          currentNewGarment = g;
+          var nu = document.getElementById('n_unit');
+          var defU = nu && nu.value === 'CM' ? 'CM' : 'INCH';
+          if (!newMeasureDraft[g]) newMeasureDraft[g] = { unit: defU, values: {} };
+          if (!newMeasureDraft[g].values || Object.keys(newMeasureDraft[g].values).length === 0) {
+            newMeasureDraft[g].unit = defU;
+          }
+          var fields = templates[g] || [];
+          var payload = newMeasureDraft[g];
+          document.getElementById('new-tab-body').innerHTML =
+            renderMeasureEditor(g, payload, fields, 'nu-') +
+            '<p style="margin:0.75rem 0 0;font-size:0.82rem;color:var(--muted)">Optional — add now or later from the customer profile.</p>';
+          document.querySelectorAll('.new-tab-g').forEach(function (b) {
+            var on = b.getAttribute('data-g') === g;
+            b.classList.toggle('btn-teal', on);
+            b.classList.toggle('btn-ghost', !on);
+          });
+        }
+
+        await TSShell.mount('customers', cid ? 'Customer profile' : 'New customer', async function () {
+          if (!cid) {
+            return (
+              '<div class="panel"><div class="panel-header"><h2>New customer</h2></div><div style="padding:1.25rem">' +
+              '<form id="nf" class="ts-app-form" style="max-width:720px">' +
+              '<div class="form-grid two">' +
+              '<div><label>Name</label><input id="n_name" type="text" required placeholder="Customer name" /></div>' +
+              '<div><label>Phone</label><input id="n_phone" type="tel" required placeholder="Mobile number" /></div></div>' +
+              '<div><label>Address</label><textarea id="n_addr" placeholder="Optional"></textarea></div>' +
+              '<div><label>Default measurement unit</label>' +
+              '<select id="n_unit"><option value="INCH">Inches (in)</option><option value="CM">Centimetres (cm)</option></select></div>' +
+              '<p style="margin:1rem 0 0.35rem;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted)">Measurements (optional)</p>' +
+              '<p style="margin:0 0 0.75rem;font-size:0.88rem;color:var(--muted)">Record sizes for the garments you measure today. You can always edit these later.</p>' +
+              '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">' +
+              GARMENTS.map(function (g) {
+                return '<button type="button" class="btn btn-ghost btn-sm new-tab-g" data-g="' + g + '">' + g + '</button>';
+              }).join('') +
+              '</div>' +
+              '<div id="new-tab-body" class="form-grid"></div>' +
+              '<button type="submit" class="btn btn-primary" style="margin-top:1.25rem">Save customer</button>' +
+              '</form></div></div>'
+            );
+          }
+
+          var cr = await TSApi.get('/api/customers/' + cid);
+          if (!cr.ok) return '<p>Customer not found.</p>';
+          var c = await cr.json();
+          var pu = (c.preferredUnit || 'INCH').toString();
+
+          var histHtml = '';
+          try {
+            var hr = await TSApi.get('/api/customers/' + cid + '/orders');
+            var orders = await hr.json();
+            var rows = orders
+              .map(function (o) {
+                var bal = Number(o.totalAmount) - Number(o.advanceAmount || 0);
+                return (
+                  '<tr><td>#' +
+                  o.serialNumber +
+                  '</td><td>' +
+                  o.garmentType +
+                  '</td><td>' +
+                  o.deliveryDate +
+                  '</td><td>' +
+                  o.status +
+                  '</td><td>₹' +
+                  Number(o.totalAmount).toFixed(0) +
+                  '</td><td>₹' +
+                  bal.toFixed(0) +
+                  '</td><td><a href="/app/order.html?id=' +
+                  o.id +
+                  '">View</a></td></tr>'
+                );
+              })
+              .join('');
+            histHtml =
+              '<div class="panel" style="margin-top:1rem"><div class="panel-header"><h2>Order history</h2></div>' +
+              '<div class="table-wrap"><table class="data"><thead><tr><th>#</th><th>Garment</th><th>Delivery</th><th>Status</th><th>Total</th><th>Balance</th><th></th></tr></thead><tbody>' +
+              (rows || '<tr><td colspan="7">No orders yet.</td></tr>') +
+              '</tbody></table></div></div>';
+          } catch (e) {
+            histHtml = '';
+          }
+
+          var inner =
+            '<div class="panel"><div class="panel-header"><h2>Details</h2><a class="btn btn-ghost btn-sm" href="/app/customers.html">Back to list</a></div>' +
+            '<div style="padding:1.25rem"><form id="ef" class="form-grid ts-app-form" style="max-width:560px">' +
+            '<div class="form-grid two"><div><label>Name</label><input id="e_name" type="text" required value="' +
+            TSShell.escapeHtml(c.name) +
+            '" /></div>' +
+            '<div><label>Phone</label><input id="e_phone" type="tel" required value="' +
+            TSShell.escapeHtml(c.phone) +
+            '" /></div></div>' +
+            '<div><label>Address</label><textarea id="e_addr">' +
+            TSShell.escapeHtml(c.address || '') +
+            '</textarea></div>' +
+            '<div><label>Default measurement unit</label><select id="e_unit">' +
+            '<option value="INCH"' +
+            (pu === 'INCH' ? ' selected' : '') +
+            '>Inches (in)</option>' +
+            '<option value="CM"' +
+            (pu === 'CM' ? ' selected' : '') +
+            '>Centimetres (cm)</option></select></div>' +
+            '<button type="submit" class="btn btn-primary">Save details</button>' +
+            '</form></div></div>';
+
+          inner +=
+            '<div class="panel"><div class="panel-header"><h2>Saved measurements</h2><p style="margin:0;font-size:0.85rem;color:var(--muted)">Industry-style fields; values use the unit you select per garment.</p></div><div style="padding:1.25rem">';
+          inner += '<div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem">';
+          GARMENTS.forEach(function (g) {
+            inner +=
+              '<button type="button" class="btn btn-ghost btn-sm tab-g" data-g="' +
+              g +
+              '">' +
+              g +
+              '</button>';
+          });
+          inner += '</div><div id="tab-body"></div></div></div>';
+          inner += histHtml;
+          return inner;
+        });
+
+        if (!cid) {
+          var nUnit = document.getElementById('n_unit');
+          if (nUnit)
+            nUnit.addEventListener('change', function () {
+              syncNewTabToDraft(currentNewGarment);
+              var v = nUnit.value === 'CM' ? 'CM' : 'INCH';
+              GARMENTS.forEach(function (g) {
+                if (!newMeasureDraft[g]) newMeasureDraft[g] = { unit: v, values: {} };
+                var empty = !newMeasureDraft[g].values || !Object.keys(newMeasureDraft[g].values).some(function (k) {
+                  return newMeasureDraft[g].values[k] && String(newMeasureDraft[g].values[k]).trim() !== '';
+                });
+                if (empty) newMeasureDraft[g].unit = v;
+              });
+              renderNewCustomerMeasureTab(currentNewGarment);
+            });
+          document.querySelectorAll('.new-tab-g').forEach(function (b) {
+            b.addEventListener('click', function () {
+              renderNewCustomerMeasureTab(b.getAttribute('data-g'));
+            });
+          });
+          renderNewCustomerMeasureTab('SHIRT');
+
+          document.getElementById('nf').onsubmit = async function (e) {
+            e.preventDefault();
+            syncNewTabToDraft(currentNewGarment);
+            var body = {
+              name: document.getElementById('n_name').value.trim(),
+              phone: document.getElementById('n_phone').value.trim(),
+              address: document.getElementById('n_addr').value,
+              preferredUnit: document.getElementById('n_unit').value,
+            };
+            var res = await TSApi.postJson('/api/customers', body);
+            if (res.ok) {
+              var created = await res.json();
+              var failed = [];
+              for (var i = 0; i < GARMENTS.length; i++) {
+                var g = GARMENTS[i];
+                var d = newMeasureDraft[g];
+                if (!d) continue;
+                var hasAny = Object.keys(d.values || {}).some(function (k) {
+                  return d.values[k] && String(d.values[k]).trim() !== '';
+                });
+                if (!hasAny) continue;
+                var pr = await TSApi.putJson('/api/customers/' + created.id + '/measurements/' + g, {
+                  unit: d.unit,
+                  values: d.values,
+                });
+                if (!pr.ok) failed.push(g);
+              }
+              if (failed.length) alert('Customer saved. Could not save measurements for: ' + failed.join(', ') + '.');
+              window.location.href = '/app/customer.html?id=' + created.id;
+            } else {
+              var err = await res.json().catch(function () {
+                return {};
+              });
+              alert(err.message || err.error || 'Could not create');
+            }
+          };
+          return;
+        }
+
+        function loadTab(g) {
+          document.querySelectorAll('.tab-g').forEach(function (b) {
+            var on = b.getAttribute('data-g') === g;
+            b.classList.toggle('btn-teal', on);
+            b.classList.toggle('btn-ghost', !on);
+          });
+          var fields = templates[g] || [];
+          TSApi.get('/api/customers/' + cid + '/measurements/' + g)
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (m) {
+              var payload = parsePayloadJson(m.dataJson);
+              document.getElementById('tab-body').innerHTML =
+                '<div class="ts-app-form" style="max-width:720px">' +
+                renderMeasureEditor(g, payload, fields) +
+                '<button type="button" class="btn btn-primary" id="saveM" style="margin-top:1rem">Save ' +
+                g +
+                '</button></div>';
+              document.getElementById('saveM').onclick = async function () {
+                var unitEl = document.querySelector('input[name="u-' + g + '"]:checked');
+                var unit = unitEl ? unitEl.value : 'INCH';
+                var inputs = document.querySelectorAll('#tab-body input[data-k]');
+                var values = {};
+                inputs.forEach(function (inp) {
+                  values[inp.getAttribute('data-k')] = inp.value;
+                });
+                var res = await TSApi.putJson('/api/customers/' + cid + '/measurements/' + g, { unit: unit, values: values });
+                if (res.ok) alert('Saved');
+                else alert('Could not save');
+              };
+            });
+        }
+
+        document.querySelectorAll('.tab-g').forEach(function (b) {
+          b.addEventListener('click', function () {
+            loadTab(b.getAttribute('data-g'));
+          });
+        });
+        loadTab('SHIRT');
+
+        document.getElementById('ef').onsubmit = async function (e) {
+          e.preventDefault();
+          var body = {
+            name: document.getElementById('e_name').value,
+            phone: document.getElementById('e_phone').value,
+            address: document.getElementById('e_addr').value,
+            preferredUnit: document.getElementById('e_unit').value,
+          };
+          var res = await TSApi.putJson('/api/customers/' + cid, body);
+          if (res.ok) alert('Saved');
+          else alert('Error');
+        };
+      });
+    </script>
+  </body>
+</html>

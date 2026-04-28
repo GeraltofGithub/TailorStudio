@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Studio — Tailor Studio</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <script src="/js/api.js"></script>
+    <script src="/js/shell.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', async function () {
+        await TSShell.mount('settings', 'Studio profile', async function (me) {
+          if (me.role !== 'OWNER') {
+            return (
+              '<div class="panel"><div style="padding:1.5rem;color:var(--muted)">Studio settings are only available to the owner account.</div></div>'
+            );
+          }
+          return (
+            '<div class="panel"><div class="panel-header"><h2>Business details</h2></div><div style="padding:1.25rem">' +
+            '<form id="sf" class="form-grid" style="max-width:520px">' +
+            '<div><label>Studio name</label><input id="name" required value="' +
+            TSShell.escapeHtml(me.businessName || '') +
+            '" /></div>' +
+            '<div><label>Tagline</label><input id="tagline" value="' +
+            TSShell.escapeHtml(me.tagline || '') +
+            '" /></div>' +
+            '<div><label>Address</label><textarea id="address">' +
+            TSShell.escapeHtml(me.address || '') +
+            '</textarea></div>' +
+            '<div class="form-grid two">' +
+            '<div><label>Phone</label><input id="phone" value="' +
+            TSShell.escapeHtml(me.phone || '') +
+            '" /></div>' +
+            '<div><label>Alt. phone</label><input id="secondaryPhone" value="' +
+            TSShell.escapeHtml(me.secondaryPhone || '') +
+            '" /></div></div>' +
+            '<button type="submit" class="btn btn-primary">Save</button>' +
+            '</form><p id="sm" style="margin-top:1rem"></p></div></div>'
+          );
+        });
+
+        var mr = await TSApi.get('/api/me');
+        var me = await mr.json();
+        if (me.role === 'OWNER') {
+          var f = document.getElementById('sf');
+          if (f)
+            f.onsubmit = async function (e) {
+              e.preventDefault();
+              var body = {
+                name: document.getElementById('name').value,
+                tagline: document.getElementById('tagline').value || null,
+                address: document.getElementById('address').value || null,
+                phone: document.getElementById('phone').value || null,
+                secondaryPhone: document.getElementById('secondaryPhone').value || null,
+              };
+              var res = await TSApi.patchJson('/api/business', body);
+              var el = document.getElementById('sm');
+              if (res.ok) el.textContent = 'Saved.';
+              else el.textContent = 'Could not save.';
+            };
+        }
+      });
+    </script>
+  </body>
+</html>

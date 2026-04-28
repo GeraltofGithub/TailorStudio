@@ -1,0 +1,87 @@
+import { memo, useCallback, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+
+import { authService } from '../services/authService'
+
+type Msg = { kind: 'success' | 'error'; text: string } | null
+
+export default memo(function JoinPage() {
+  const [msg, setMsg] = useState<Msg>(null)
+  const [pending, setPending] = useState(false)
+  const nav = useNavigate()
+
+  const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (pending) return
+    setPending(true)
+    setMsg(null)
+
+    const fd = new FormData(e.currentTarget)
+    const body = {
+      joinCode: String(fd.get('joinCode') || '').trim(),
+      fullName: String(fd.get('fullName') || '').trim(),
+      email: String(fd.get('email') || '').trim(),
+      password: String(fd.get('password') || ''),
+    }
+
+    try {
+      const data = await authService.staffSignup(body)
+      setMsg({ kind: 'success', text: data.message || 'Joined.' })
+      window.setTimeout(() => nav('/login'), 900)
+    } catch (e: any) {
+      setMsg({ kind: 'error', text: e?.payload?.error || e?.payload?.message || e?.message || 'Could not join' })
+    }
+
+    setPending(false)
+  }, [nav, pending])
+
+  const msgNode = useMemo(() => {
+    if (!msg) return null
+    return <div className={`alert ${msg.kind === 'success' ? 'alert-success' : 'alert-error'}`}>{msg.text}</div>
+  }, [msg])
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <h1>Join your studio</h1>
+        <p className="sub">Ask the owner for the join code, then create your staff account.</p>
+        <div id="msg">{msgNode}</div>
+        <form id="f" onSubmit={onSubmit}>
+          <div>
+            <label htmlFor="joinCode">Studio join code</label>
+            <input
+              id="joinCode"
+              name="joinCode"
+              required
+              minLength={8}
+              maxLength={64}
+              autoComplete="off"
+              className="join-code-box"
+              style={{ textAlign: 'left' }}
+              placeholder="e.g. A1B2C3D4"
+            />
+          </div>
+          <div>
+            <label htmlFor="fullName">Your name</label>
+            <input id="fullName" name="fullName" required maxLength={120} />
+          </div>
+          <div>
+            <label htmlFor="email">Email (login)</label>
+            <input type="email" id="email" name="email" required autoComplete="email" />
+          </div>
+          <div>
+            <label htmlFor="password">Password (min 8)</label>
+            <input type="password" id="password" name="password" required minLength={8} maxLength={100} autoComplete="new-password" />
+          </div>
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={pending}>
+            {pending ? 'Joining…' : 'Join studio'}
+          </button>
+        </form>
+        <p className="auth-footer">
+          <Link to="/login">Sign in</Link> · <Link to="/signup">Create a new studio</Link>
+        </p>
+      </div>
+    </div>
+  )
+})
+

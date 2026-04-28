@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard — Tailor Studio</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <div id="boot-loading" class="auth-page" style="min-height: 40vh">
+      <p style="color: var(--text, #e8ecf4); margin: 0">Loading workspace…</p>
+    </div>
+    <script src="/js/api.js"></script>
+    <script src="/js/shell.js"></script>
+    <script>
+      function money(n) {
+        if (n == null) return '—';
+        var x = Number(n);
+        return '₹ ' + x.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      }
+      function statusBadge(st) {
+        var map = {
+          PENDING: 'badge-pending',
+          IN_PROGRESS: 'badge-progress',
+          READY: 'badge-ready',
+          DELIVERED: 'badge-done',
+        };
+        var c = map[st] || '';
+        return '<span class="badge ' + c + '">' + st.replace('_', ' ') + '</span>';
+      }
+      document.addEventListener('DOMContentLoaded', async function () {
+        await TSShell.mount('dashboard', 'Dashboard', async function () {
+          var sr = await TSApi.get('/api/dashboard/stats');
+          var s = await sr.json();
+          var or = await TSApi.get('/api/orders');
+          var orders = await or.json();
+          var recent = orders.slice(0, 8);
+          var rows = recent
+            .map(function (o) {
+              return (
+                '<tr><td>#' +
+                o.serialNumber +
+                '</td><td>' +
+                TSShell.escapeHtml(o.customer.name) +
+                '</td><td>' +
+                o.garmentType +
+                '</td><td>' +
+                o.deliveryDate +
+                '</td><td>' +
+                statusBadge(o.status) +
+                '</td><td><a href="/app/order.html?id=' +
+                o.id +
+                '">Open</a></td></tr>'
+              );
+            })
+            .join('');
+          return (
+            '<div class="grid-metrics">' +
+            '<div class="metric"><div class="label">Total orders</div><div class="value">' +
+            s.totalOrders +
+            '</div></div>' +
+            '<div class="metric"><div class="label">Active (not delivered)</div><div class="value accent">' +
+            s.pendingDeliveries +
+            '</div></div>' +
+            '<div class="metric"><div class="label">Income today (delivered)</div><div class="value">' +
+            money(s.dailyIncome) +
+            '</div></div></div>' +
+            '<div class="panel"><div class="panel-header"><h2>Recent orders</h2><a class="btn btn-teal btn-sm" href="/app/order.html">New order</a></div>' +
+            '<div class="table-wrap"><table class="data"><thead><tr><th>#</th><th>Customer</th><th>Type</th><th>Delivery</th><th>Status</th><th></th></tr></thead><tbody>' +
+            (rows || '<tr><td colspan="6">No orders yet.</td></tr>') +
+            '</tbody></table></div></div>'
+          );
+        });
+      });
+    </script>
+  </body>
+</html>

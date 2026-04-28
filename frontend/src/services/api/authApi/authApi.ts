@@ -1,0 +1,43 @@
+import { api } from '../api'
+
+export type UserRole = 'OWNER' | 'STAFF'
+
+export type MeResponse = {
+  id: number
+  fullName: string
+  role: UserRole
+  businessId: number
+  businessName: string
+}
+
+class AuthApi {
+  private readonly _url = {
+    ME: '/api/me',
+    SIGNUP: '/api/auth/signup',
+    STAFF_SIGNUP: '/api/auth/staff-signup',
+  } as const
+
+  me() {
+    return api._get<MeResponse>(this._url.ME)
+  }
+
+  signup(data: {
+    businessName: string
+    tagline: string | null
+    address: string | null
+    phone: string | null
+    secondaryPhone: string | null
+    ownerName: string
+    email: string
+    password: string
+  }) {
+    return api._post<{ message?: string; error?: string }>(this._url.SIGNUP, data)
+  }
+
+  staffSignup(data: { joinCode: string; fullName: string; email: string; password: string }) {
+    return api._post<{ message?: string; error?: string }>(this._url.STAFF_SIGNUP, data)
+  }
+}
+
+export const authApi = new AuthApi()
+

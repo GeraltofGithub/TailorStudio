@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Order — Tailor Studio</title>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
+  <body>
+    <script src="/js/api.js"></script>
+    <script src="/js/shell.js"></script>
+    <script src="/js/receipt.js"></script>
+    <script>
+      function todayISODate() {
+        var d = new Date();
+        return d.toISOString().slice(0, 10);
+      }
+      function plusDays(n) {
+        var d = new Date();
+        d.setDate(d.getDate() + n);
+        return d.toISOString().slice(0, 10);
+      }
+
+      /** Normalize Jackson LocalDate (string or [y,m,d]) for &lt;input type="date"&gt; */
+      function isoDate(v) {
+        if (!v) return todayISODate();
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+        if (Array.isArray(v) && v.length >= 3) {
+          var y = v[0];
+          var m = String(v[1]).padStart(2, '0');
+          var day = String(v[2]).padStart(2, '0');
+          return y + '-' + m + '-' + day;
+        }
+        return todayISODate();
+      }
+
+      function parseSnapFromOrder(existing) {
+        if (!existing || !existing.measurementSnapshotJson) return null;
+        try {
+          return JSON.parse(existing.measurementSnapshotJson);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', async function () {
+        var me = await TSShell.requireAuth();
+        if (!me) return;
+
+        var studio = {
+          name: me.businessName || 'Tailor Studio',
+          tagline: me.tagline || '',
+          phone: me.phone || '',
+          address: me.address || '',
+        };
+
+        var params = new URLSearchParams(window.location.search);
+        var oid = params.get('id') ? parseInt(params.get('id'), 10) : null;
+
+        var existingOrder = null;
+        var orderMissing = false;
+        if (oid) {
+          var or0 = await TSApi.get('/api/orders/' + oid);
+          if (!or0.ok) orderMissing = true;
+          else existingOrder = await or0.json();
+        }
+
+        var snapCache = parseSnapFromOrder(existingOrder);
+        var paymentInfo = { phonePeConfigured: false };
+
+        var customerPhoneMap = {};
+        await TSShell.mount('orders', oid ? 'Edit order' : 'New order', async function () {
+          if (orderMissing) return '<p>Order not found.</p>';
+
+          var existing = existingOrder;
+
+          var cr = await TSApi.get('/api/customers');
+          var customers = await cr.json();
+          customerPhoneMap = {};
+          customers.forEach(function (c) {
+            customerPhoneMap[String(c.id)] = c.phone || '';
+          });
+          var opts = customers
+            .map(function (c) {
+              var sel = existing && existing.customer && c.id === existing.customer.id ? ' selected' : '';
+              return '<option value="' + c.id + '"' + sel + '>' + TSShell.escapeHtml(c.name + ' — ' + c.phone) + '</option>';
+            })
+            .join('');
+
+          var garment = existing ? existing.garmentType : 'SHIRT';
+          var orderDate = existing ? isoDate(existing.orderDate) : todayISODate();
+          var deliveryDate = existing ? isoDate(existing.deliveryDate) : plusDays(7);
+          var status = existing ? existing.status : 'PENDING';
+          var advance = existing ? String(existing.advanceAmount) : '0';
+          var notes = existing ? existing.notes || '' : '';
+          var matNotes = existing && existing.materialsNotes ? existing.materialsNotes : '';
+          var demNotes = existing && existing.demandsNotes ? existing.demandsNotes : '';
+          var lines = existing && existing.lines && existing.lines.length ? existing.lines : [];
+          var totalEst = lines.reduce(function (s, ln) {
+            return s + (Number(ln.amount) || 0);
+          }, 0);
+          var billDesc = lines[0] && lines[0].description ? lines[0].description : '';
+          if (lines.length > 2) billDesc = billDesc ? billDesc + ' (+ more lines)' : 'Combined charges';
+          var extraLine = lines.length > 1 ? lines[1] : null;
+          var extraAmt = extraLine ? Number(extraLine.amount) || 0 : 0;
+          var extraDesc = extraLine ? extraLine.description || '' : '';
+          var advNum = parseFloat(advance) || 0;
+
+          return (
+            '<div class="no-print" style="margin-bottom:1rem"><a class="btn btn-ghost btn-sm" href="/app/orders.html">← Orders</a></div>' +
+            '<div class="no-print">' +
+            '<form id="of" class="ts-app-form">' +
+            '<div class="panel"><div class="panel-header"><h2>' +
+            (existing ? 'Order #' + existing.serialNumber : 'New order') +
+            '</h2><div class="no-print" style="display:flex;gap:0.5rem;flex-wrap:wrap">' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="btn-print-pay">Print payment receipt</button>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="btn-print-order">Print work order</button></div></div>' +
+            '<div class="form-grid" style="padding:1.25rem;gap:1rem">' +
+            '<p style="margin:0;color:var(--muted);font-size:0.9rem">Who it&apos;s for, what you&apos;re stitching, dates, and money — like a paper register, without the columns you don&apos;t need.</p>' +
+            '<div class="form-grid two">' +
+            '<div><label>Customer</label><select id="cust" required>' +
+            '<option value="">Choose customer…</option>' +
+            opts +
+            '</select></div>' +
+            '<div><label>Garment</label><select id="gar">' +
+            ['SHIRT', 'PANT', 'BLOUSE', 'SUIT']
+              .map(function (g) {
+                return '<option value="' + g + '"' + (g === garment ? ' selected' : '') + '>' + g + '</option>';
+              })
+              .join('') +
+            '</select></div></div>' +
+            '<div class="form-grid two">' +
+            '<div><label>Order taken on</label><input id="od" type="date" required value="' +
+            orderDate +
+            '" /></div>' +
+            '<div><label>Ready / delivery by</label><input id="dd" type="date" required value="' +
+            deliveryDate +
+            '" /></div></div>' +
+            '<div class="form-grid two">' +
+            '<div><label>Work status</label><select id="st">' +
+            ['PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED']
+              .map(function (s) {
+                return (
+                  '<option value="' +
+                  s +
+                  '"' +
+                  (s === status ? ' selected' : '') +
+                  '>' +
+                  s.replace(/_/g, ' ') +
+                  '</option>'
+                );
+              })
+              .join('') +
+            '</select></div>' +
+            '<div><label>Advance taken (₹)</label><input id="adv" type="number" step="0.01" min="0" value="' +
+            advance +
+            '" placeholder="0" /></div></div>' +
+            '<div class="panel" style="margin-top:0.5rem;background:var(--bg-elevated);border:1px solid var(--border)"><div class="panel-header"><h2 style="font-size:1rem">Bill</h2></div>' +
+            '<div style="padding:1rem 1.25rem">' +
+            '<div class="form-grid two">' +
+            '<div><label>Total charge for this job (₹)</label><input id="bill-total" type="number" step="0.01" min="0" value="' +
+            (totalEst > 0 ? totalEst : '') +
+            '" placeholder="e.g. 1500" /></div>' +
+            '<div><label>What it&apos;s for (on bill)</label><input id="bill-desc" type="text" value="' +
+            TSShell.escapeHtml(billDesc) +
+            '" placeholder="e.g. Shirt — full stitching" /></div></div>' +
+            '<div id="extra-row" class="' +
+            (extraLine ? '' : 'order-extra-hidden') +
+            '" style="margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--border)">' +
+            '<p style="margin:0 0 0.5rem;font-size:0.8rem;color:var(--muted)">Extra (lining, buttons, urgent fee…)</p>' +
+            '<div class="form-grid two">' +
+            '<div><label>Extra description</label><input id="extra-desc" type="text" value="' +
+            TSShell.escapeHtml(extraDesc) +
+            '" placeholder="Optional" /></div>' +
+            '<div><label>Extra amount (₹)</label><input id="extra-amt" type="number" step="0.01" min="0" value="' +
+            (extraAmt > 0 ? extraAmt : '') +
+            '" /></div></div></div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="toggle-extra" style="margin-top:0.75rem">' +
+            (extraLine ? 'Remove extra line' : '+ Add extra charge (material / fees)') +
+            '</button></div></div>' +
+            '<div class="panel" style="margin-top:1rem;background:var(--bg-elevated);border:1px solid var(--border)"><div class="panel-header"><h2 style="font-size:1rem">Payment</h2></div>' +
+            '<div style="padding:1rem 1.25rem;font-size:0.95rem">' +
+            '<div class="stat-row"><span>Job total</span><strong id="sum-display">₹ ' +
+            totalEst.toFixed(2) +
+            '</strong></div>' +
+            '<div class="stat-row"><span>Advance received</span><strong id="adv-display">₹ ' +
+            advNum.toFixed(2) +
+            '</strong></div>' +
+            '<div class="stat-row"><span>Balance due</span><strong id="bal-display">₹ ' +
+            Math.max(0, totalEst - advNum).toFixed(2) +
+            '</strong></div>' +
+            '<p style="margin:0.75rem 0 0;color:var(--muted);font-size:0.85rem">Set status to Delivered when the customer collects; balance zero means fully paid.</p>' +
+            '<div id="pay-actions-wrap" style="margin-top:0.75rem">' +
+            (oid
+              ? '<p id="pay-actions-hint" style="margin:0 0 0.5rem;font-size:0.88rem;color:var(--muted)">Record cash, UPI (PhonePe), or mark fully paid when there is balance due.</p>' +
+                '<div id="pay-actions" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;min-height:2.25rem">' +
+                '<button type="button" class="btn btn-teal btn-sm" id="btn-receive-pay">Receive payment</button>' +
+                '<button type="button" class="btn btn-ghost btn-sm" id="btn-mark-paid">Mark fully paid</button>' +
+                '<button type="button" class="btn btn-ghost btn-sm" id="btn-sync-phonepe" style="display:none">Sync online payment</button>' +
+                '</div>' +
+                '<p id="paid-full-note" style="display:none;margin:0.5rem 0 0;color:var(--muted);font-size:0.9rem">No balance due — this order is fully paid.</p>'
+              : '<p style="margin:0;color:var(--muted);font-size:0.85rem">Save the order first to record payments (cash, UPI, or mark as paid).</p>') +
+            '</div>' +
+            '</div></div>' +
+            '<div class="panel" style="margin-top:1rem"><div class="panel-header"><h2 style="font-size:1rem">Work order details</h2><p style="margin:0;font-size:0.8rem;color:var(--muted)">Shown on the <strong>work order</strong> print — not on the payment receipt.</p></div>' +
+            '<div style="padding:1rem 1.25rem" class="form-grid ts-app-form">' +
+            '<div><label>Materials & cloth</label><textarea id="mat_notes" rows="2" placeholder="Fabric, colour, lining, buttons, supplies…">' +
+            TSShell.escapeHtml(matNotes) +
+            '</textarea></div>' +
+            '<div><label>Customer requests & demands</label><textarea id="dem_notes" rows="2" placeholder="Fitting preferences, deadlines, special instructions…">' +
+            TSShell.escapeHtml(demNotes) +
+            '</textarea></div>' +
+            '<div><label>Workshop notes</label><textarea id="notes" rows="2" placeholder="Internal reminders, fitting notes…">' +
+            TSShell.escapeHtml(notes) +
+            '</textarea></div></div></div>' +
+            '<div class="panel" style="margin-top:1rem"><div class="panel-header"><h2 style="font-size:1rem">Measurements on this order</h2>' +
+            '<button type="button" class="btn btn-teal btn-sm" id="pullM">Copy from customer profile</button></div>' +
+            '<div style="padding:1rem 1.25rem;color:var(--muted);font-size:0.88rem">Uses saved sizes for the customer and garment above. Click after selecting both.</div>' +
+            '<pre id="snap-preview" style="display:none;white-space:pre-wrap;background:var(--bg-elevated);padding:1rem;border-radius:var(--radius-sm);border:1px solid var(--border);color:var(--text);font-size:0.8rem;max-height:220px;overflow:auto"></pre></div>' +
+            '<div class="panel" style="margin-top:1rem"><div class="panel-header"><h2 style="font-size:1rem">WhatsApp customer notification (demo)</h2></div>' +
+            '<div style="padding:1rem 1.25rem" class="wa-demo-box">' +
+            '<p style="margin:0 0 0.5rem;color:var(--muted);font-size:0.86rem">Demo-only UI: prepares a message with payment and delivery date details.</p>' +
+            '<div class="form-grid two">' +
+            '<div><label>Notify customer phone</label><input id="wa-phone" type="text" placeholder="Customer phone" /></div>' +
+            '<div><label>Expected delivery date</label><input id="wa-date" type="date" /></div></div>' +
+            '<div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap">' +
+            '<label style="margin:0;text-transform:none;letter-spacing:normal;font-size:0.88rem"><input id="wa-inc-pay" type="checkbox" checked /> Include payment summary</label>' +
+            '<label style="margin:0;text-transform:none;letter-spacing:normal;font-size:0.88rem"><input id="wa-inc-date" type="checkbox" checked /> Include expected delivery date</label>' +
+            '</div>' +
+            '<button type="button" class="btn btn-teal btn-sm" id="wa-preview-btn" style="margin-top:0.75rem">Generate demo message</button>' +
+            '<button type="button" class="btn btn-ghost btn-sm" id="wa-send-btn" style="margin-top:0.75rem">Simulate WhatsApp send</button>' +
+            '<div id="wa-preview" class="wa-preview" style="display:none"></div>' +
+            '</div></div>' +
+            '<button type="submit" class="btn btn-primary" style="margin-top:1rem">Save order</button>' +
+            '</div></div></form></div>' +
+            '<div id="pay-modal" class="no-print" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;padding:1rem">' +
+            '<div class="panel pay-modal-shell" style="margin:0;position:relative">' +
+            '<div class="pay-modal-body">' +
+            '<button type="button" id="pay-modal-close" class="btn btn-ghost btn-sm" style="position:absolute;top:0.5rem;right:0.5rem" aria-label="Close">✕</button>' +
+            '<div id="pay-step-choice">' +
+            '<h3 style="margin-top:0">Receive payment</h3>' +
+            '<p style="color:var(--muted);font-size:0.9rem">How is the customer paying the balance?</p>' +
+            '<div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1rem">' +
+            '<button type="button" class="btn btn-primary" id="pay-opt-cash">Cash</button>' +
+            '<button type="button" class="btn btn-teal" id="pay-opt-online">Online (UPI / PhonePe)</button>' +
+            '</div></div>' +
+            '<div id="pay-step-cash" style="display:none">' +
+            '<h3 style="margin-top:0">Cash received</h3>' +
+            '<p style="color:var(--muted);font-size:0.85rem">Balance due: <strong id="pay-bal-due"></strong></p>' +
+            '<label>Amount received (₹)</label><input id="pay-cash-amt" type="number" step="0.01" min="0" />' +
+            '<div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">' +
+            '<button type="button" class="btn btn-primary" id="pay-cash-submit">Record cash</button>' +
+            '<button type="button" class="btn btn-ghost" id="pay-cash-back">Back</button>' +
+            '</div></div>' +
+            '<div id="pay-step-online" style="display:none">' +
+            '<h3 style="margin-top:0">Online payment</h3>' +
+            '<p style="color:var(--muted);font-size:0.9rem">You will be redirected to PhonePe to pay with UPI or card. When you return, we confirm the payment automatically.</p>' +
+            '<p id="pay-online-off" style="display:none;color:#b44;font-size:0.9rem">PhonePe is not configured. Set phonepe.enabled and credentials in application.properties, then restart the app.</p>' +
+            '<div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">' +
+            '<button type="button" class="btn btn-primary" id="pay-online-go">Pay now</button>' +
+            '<button type="button" class="btn btn-ghost" id="pay-online-back">Back</button>' +
+            '</div></div>' +
+            '</div></div></div>' +
+            '<div id="receipt-print" class="receipt-sheet" aria-label="Payment receipt"></div>' +
+            '<div id="order-slip-print" class="receipt-sheet" style="margin-top:1.5rem" aria-label="Work order"></div>'
+          );
+        });
+
+        function gatherLines() {
+          var g = document.getElementById('gar').value;
+          var main = parseFloat(document.getElementById('bill-total').value) || 0;
+          var desc = document.getElementById('bill-desc').value.trim() || g + ' — tailoring';
+          var out = [{ description: desc, rate: main, amount: main }];
+          var exRow = document.getElementById('extra-row');
+          var exD = document.getElementById('extra-desc');
+          var exA = document.getElementById('extra-amt');
+          if (exRow && !exRow.classList.contains('order-extra-hidden') && exD && exA) {
+            var ed = exD.value.trim();
+            var ea = parseFloat(exA.value) || 0;
+            if (ed && ea > 0) out.push({ description: ed, rate: ea, amount: ea });
+          }
+          return out;
+        }
+
+        function balanceDue() {
+          var lines = gatherLines();
+          var sum = lines.reduce(function (s, ln) {
+            return s + (Number(ln.amount) || 0);
+          }, 0);
+          var adv = parseFloat(document.getElementById('adv').value) || 0;
+          return Math.max(0, sum - adv);
+        }
+
+        function refreshPayActions() {
+          if (!oid) return;
+          var clientBal = balanceDue();
+          var serverBal =
+            paymentInfo && paymentInfo.balanceDue != null ? Number(paymentInfo.balanceDue) : null;
+          var hasBalance =
+            clientBal > 0.005 ||
+            (serverBal != null && !isNaN(serverBal) && serverBal > 0.005);
+          var wrap = document.getElementById('pay-actions');
+          var paidNote = document.getElementById('paid-full-note');
+          var hint = document.getElementById('pay-actions-hint');
+          var syncBtn = document.getElementById('btn-sync-phonepe');
+          if (hasBalance) {
+            if (wrap) wrap.style.display = 'flex';
+            if (paidNote) paidNote.style.display = 'none';
+            if (hint) hint.style.display = 'block';
+            if (syncBtn) syncBtn.style.display = paymentInfo.phonePeConfigured ? 'inline-block' : 'none';
+          } else {
+            if (wrap) wrap.style.display = 'none';
+            if (paidNote) paidNote.style.display = 'block';
+            if (hint) hint.style.display = 'none';
+            if (syncBtn) syncBtn.style.display = 'none';
+          }
+        }
+
+        async function loadPaymentInfo() {
+          if (!oid) return;
+          try {
+            var r = await TSApi.get('/api/orders/' + oid + '/payments/info');
+            if (r.ok) paymentInfo = await r.json();
+          } catch (e) {}
+          refreshPayActions();
+        }
+
+        function recomputeTotals() {
+          var lines = gatherLines();
+          var sum = lines.reduce(function (s, ln) {
+            return s + (Number(ln.amount) || 0);
+          }, 0);
+          var adv = parseFloat(document.getElementById('adv').value) || 0;
+          var el = document.getElementById('sum-display');
+          var advD = document.getElementById('adv-display');
+          var bal = document.getElementById('bal-display');
+          if (el) el.textContent = '₹ ' + sum.toFixed(2);
+          if (advD) advD.textContent = '₹ ' + adv.toFixed(2);
+          if (bal) bal.textContent = '₹ ' + Math.max(0, sum - adv).toFixed(2);
+          refreshPayActions();
+        }
+
+        async function refreshMeasurementSnapshot() {
+          var cid = document.getElementById('cust').value;
+          var g = document.getElementById('gar').value;
+          if (!cid) return {};
+          var r = await TSApi.get('/api/customers/' + cid + '/measurements/' + g);
+          var m = await r.json();
+          try {
+            return JSON.parse(m.dataJson || '{}');
+          } catch (e) {
+            return {};
+          }
+        }
+
+        function measurementJsonForSlip() {
+          if (snapCache && Object.keys(snapCache).length) {
+            try {
+              return JSON.stringify(snapCache);
+            } catch (e) {
+              return '';
+            }
+          }
+          if (existingOrder && existingOrder.measurementSnapshotJson) return existingOrder.measurementSnapshotJson;
+          return '';
+        }
+
+        function renderPrintBill() {
+          var cust = document.getElementById('cust');
+          var opt = cust ? cust.options[cust.selectedIndex] : null;
+          var name = opt ? opt.text : '';
+          var lines = gatherLines();
+          var sum = lines.reduce(function (s, ln) {
+            return s + (Number(ln.amount) || 0);
+          }, 0);
+          var adv = parseFloat(document.getElementById('adv').value) || 0;
+          var bal = Math.max(0, sum - adv);
+          var snLabel = existingOrder && existingOrder.serialNumber ? '#' + existingOrder.serialNumber : 'Draft';
+          var rp = document.getElementById('receipt-print');
+          if (!rp || !window.TSReceipt) return;
+          rp.innerHTML = TSReceipt.paymentReceiptHtml(studio, {
+            serialLabel: snLabel,
+            orderDate: document.getElementById('od').value,
+            deliveryDate: document.getElementById('dd').value,
+            customerName: name,
+            garment: document.getElementById('gar').value,
+            lines: lines,
+            total: sum,
+            advance: adv,
+            balance: bal,
+          });
+        }
+
+        function renderOrderSlip() {
+          var cust = document.getElementById('cust');
+          var opt = cust ? cust.options[cust.selectedIndex] : null;
+          var namePhone = opt ? opt.text : '';
+          var lines = gatherLines();
+          var sum = lines.reduce(function (s, ln) {
+            return s + (Number(ln.amount) || 0);
+          }, 0);
+          var adv = parseFloat(document.getElementById('adv').value) || 0;
+          var bal = Math.max(0, sum - adv);
+          var snLabel = existingOrder && existingOrder.serialNumber ? '#' + existingOrder.serialNumber : 'Draft';
+          var el = document.getElementById('order-slip-print');
+          if (!el || !window.TSReceipt) return;
+          var mn = document.getElementById('mat_notes');
+          var dn = document.getElementById('dem_notes');
+          el.innerHTML = TSReceipt.orderSlipHtml(studio, {
+            serialLabel: snLabel,
+            orderDate: document.getElementById('od').value,
+            deliveryDate: document.getElementById('dd').value,
+            customerLine: namePhone,
+            garment: document.getElementById('gar').value,
+            status: document.getElementById('st').value,
+            notes: document.getElementById('notes').value,
+            materialsNotes: mn ? mn.value : '',
+            demandsNotes: dn ? dn.value : '',
+            measurementSnapshotJson: measurementJsonForSlip(),
+            lines: lines,
+            totalAmount: sum,
+            advanceAmount: adv,
+            balance: bal,
+          });
+        }
+
+        function waMessageText() {
+          var custSel = document.getElementById('cust');
+          var custLabel = custSel && custSel.selectedIndex >= 0 ? custSel.options[custSel.selectedIndex].text : '';
+          var delivery = (document.getElementById('wa-date') || document.getElementById('dd')).value;
+          var includePay = document.getElementById('wa-inc-pay') && document.getElementById('wa-inc-pay').checked;
+          var includeDate = document.getElementById('wa-inc-date') && document.getElementById('wa-inc-date').checked;
+          var sum = gatherLines().reduce(function (s, ln) {
+            return s + (Number(ln.amount) || 0);
+          }, 0);
+          var adv = parseFloat(document.getElementById('adv').value) || 0;
+          var bal = Math.max(0, sum - adv);
+          var parts = ['Hello ' + (custLabel ? custLabel.split(' — ')[0] : 'Customer') + ','];
+          parts.push('Your order for ' + document.getElementById('gar').value + ' is in process.');
+          if (includePay) {
+            parts.push(
+              'Payment update: Total Rs ' +
+                sum.toFixed(2) +
+                ', Paid Rs ' +
+                adv.toFixed(2) +
+                ', Balance Rs ' +
+                bal.toFixed(2) +
+                '.'
+            );
+          }
+          if (includeDate && delivery) {
+            parts.push('Expected delivery date: ' + delivery + '.');
+          }
+          parts.push('Thank you, ' + (studio.name || 'Tailor Studio'));
+          return parts.join('\n');
+        }
+
+        var toggleEx = document.getElementById('toggle-extra');
+        var extraRow = document.getElementById('extra-row');
+        if (toggleEx && extraRow) {
+          toggleEx.onclick = function () {
+            var on = extraRow.classList.toggle('order-extra-hidden');
+            toggleEx.textContent = on ? '+ Add extra charge (material / fees)' : 'Remove extra line';
+            if (on) {
+              var exA = document.getElementById('extra-amt');
+              var exD = document.getElementById('extra-desc');
+              if (exA) exA.value = '';
+              if (exD) exD.value = '';
+            }
+            recomputeTotals();
+            renderPrintBill();
+            renderOrderSlip();
+          };
+        }
+
+        ['bill-total', 'bill-desc', 'extra-desc', 'extra-amt'].forEach(function (id) {
+          var n = document.getElementById(id);
+          if (n)
+            n.addEventListener('input', function () {
+              recomputeTotals();
+              renderPrintBill();
+              renderOrderSlip();
+            });
+        });
+        var advEl = document.getElementById('adv');
+        if (advEl) advEl.addEventListener('input', recomputeTotals);
+        if (advEl) advEl.addEventListener('input', renderPrintBill);
+        if (advEl) advEl.addEventListener('input', renderOrderSlip);
+
+        var notesEl = document.getElementById('notes');
+        if (notesEl) notesEl.addEventListener('input', renderOrderSlip);
+        ['mat_notes', 'dem_notes'].forEach(function (id) {
+          var n = document.getElementById(id);
+          if (n) n.addEventListener('input', renderOrderSlip);
+        });
+        var stEl = document.getElementById('st');
+        if (stEl)
+          stEl.addEventListener('change', function () {
+            renderOrderSlip();
+          });
+
+        var btnPP = document.getElementById('btn-print-pay');
+        var btnPO = document.getElementById('btn-print-order');
+        if (btnPP)
+          btnPP.onclick = function () {
+            renderPrintBill();
+            if (window.TSReceipt) TSReceipt.printElement(document.getElementById('receipt-print'));
+          };
+        if (btnPO)
+          btnPO.onclick = function () {
+            renderOrderSlip();
+            if (window.TSReceipt) TSReceipt.printElement(document.getElementById('order-slip-print'));
+          };
+
+        var pullBtn = document.getElementById('pullM');
+        if (pullBtn)
+          pullBtn.onclick = async function () {
+            var snap = await refreshMeasurementSnapshot();
+            snapCache = snap;
+            var pre = document.getElementById('snap-preview');
+            if (pre) {
+              pre.style.display = 'block';
+              pre.textContent = JSON.stringify(snap, null, 2);
+            }
+            renderOrderSlip();
+          };
+
+        if (snapCache) {
+          var pre = document.getElementById('snap-preview');
+          if (pre) {
+            pre.style.display = 'block';
+            pre.textContent = JSON.stringify(snapCache, null, 2);
+          }
+        }
+
+        var waDate = document.getElementById('wa-date');
+        if (waDate && document.getElementById('dd')) waDate.value = document.getElementById('dd').value;
+        var waPhone = document.getElementById('wa-phone');
+        if (waPhone) {
+          var cust = existingOrder && existingOrder.customer ? existingOrder.customer : null;
+          waPhone.value = cust && cust.phone ? cust.phone : '';
+        }
+        var waPreviewBtn = document.getElementById('wa-preview-btn');
+        var waSendBtn = document.getElementById('wa-send-btn');
+        var waPreviewEl = document.getElementById('wa-preview');
+        if (waPreviewBtn && waPreviewEl) {
+          waPreviewBtn.onclick = function () {
+            waPreviewEl.style.display = 'block';
+            waPreviewEl.textContent = waMessageText();
+          };
+        }
+        if (waSendBtn) {
+          waSendBtn.onclick = function () {
+            var p = (document.getElementById('wa-phone') && document.getElementById('wa-phone').value.trim()) || '';
+            if (!p) {
+              alert('Enter customer phone for WhatsApp demo.');
+              return;
+            }
+            var msg = waMessageText();
+            if (waPreviewEl) {
+              waPreviewEl.style.display = 'block';
+              waPreviewEl.textContent = msg;
+            }
+            alert('Demo: WhatsApp notification queued for ' + p + '.\n\n' + msg);
+          };
+        }
+
+        var formEl = document.getElementById('of');
+        if (!formEl) return;
+
+        function showPayStep(step) {
+          var c = document.getElementById('pay-step-choice');
+          var cash = document.getElementById('pay-step-cash');
+          var onl = document.getElementById('pay-step-online');
+          if (c) c.style.display = step === 'choice' ? 'block' : 'none';
+          if (cash) cash.style.display = step === 'cash' ? 'block' : 'none';
+          if (onl) onl.style.display = step === 'online' ? 'block' : 'none';
+        }
+        function openPayModal() {
+          var m = document.getElementById('pay-modal');
+          if (!m) return;
+          m.style.display = 'flex';
+          showPayStep('choice');
+        }
+        function closePayModal() {
+          var m = document.getElementById('pay-modal');
+          if (m) m.style.display = 'none';
+        }
+        var payModalEl = document.getElementById('pay-modal');
+        if (payModalEl)
+          payModalEl.addEventListener('click', function (e) {
+            if (e.target === payModalEl) closePayModal();
+          });
+        var payModalClose = document.getElementById('pay-modal-close');
+        if (payModalClose) payModalClose.onclick = closePayModal;
+        var btnRecv = document.getElementById('btn-receive-pay');
+        if (btnRecv) btnRecv.onclick = openPayModal;
+        var payOptCash = document.getElementById('pay-opt-cash');
+        if (payOptCash)
+          payOptCash.onclick = function () {
+            var bd = balanceDue();
+            var bdel = document.getElementById('pay-bal-due');
+            if (bdel) bdel.textContent = '₹ ' + bd.toFixed(2);
+            var inp = document.getElementById('pay-cash-amt');
+            if (inp) inp.value = bd > 0 ? bd.toFixed(2) : '';
+            showPayStep('cash');
+          };
+        var payCashBack = document.getElementById('pay-cash-back');
+        if (payCashBack) payCashBack.onclick = function () {
+          showPayStep('choice');
+        };
+        var payOptOnline = document.getElementById('pay-opt-online');
+        if (payOptOnline)
+          payOptOnline.onclick = function () {
+            var off = document.getElementById('pay-online-off');
+            var ok = paymentInfo.phonePeConfigured;
+            if (off) off.style.display = ok ? 'none' : 'block';
+            var go = document.getElementById('pay-online-go');
+            if (go) go.disabled = !ok;
+            showPayStep('online');
+          };
+        var payOnlineBack = document.getElementById('pay-online-back');
+        if (payOnlineBack) payOnlineBack.onclick = function () {
+          showPayStep('choice');
+        };
+        var payCashSubmit = document.getElementById('pay-cash-submit');
+        if (payCashSubmit)
+          payCashSubmit.onclick = async function () {
+            if (!oid) return;
+            var amt = parseFloat(document.getElementById('pay-cash-amt').value);
+            if (!amt || amt <= 0) {
+              alert('Enter the cash amount received.');
+              return;
+            }
+            var r = await TSApi.postJson('/api/orders/' + oid + '/payments/cash', { amount: amt });
+            var data = await r.json().catch(function () {
+              return {};
+            });
+            if (r.ok) {
+              existingOrder = data;
+              document.getElementById('adv').value = String(data.advanceAmount);
+              closePayModal();
+              recomputeTotals();
+              renderPrintBill();
+              renderOrderSlip();
+              await loadPaymentInfo();
+              alert('Cash payment recorded.');
+            } else alert(data.error || data.message || 'Could not record cash.');
+          };
+        var payOnlineGo = document.getElementById('pay-online-go');
+        if (payOnlineGo)
+          payOnlineGo.onclick = async function () {
+            if (!oid || !paymentInfo.phonePeConfigured) return;
+            var r = await TSApi.postJson('/api/orders/' + oid + '/payments/phonepe/initiate', {});
+            var data = await r.json().catch(function () {
+              return {};
+            });
+            if (r.ok && data.redirectUrl) window.location.href = data.redirectUrl;
+            else alert(data.error || 'Could not start PhonePe checkout.');
+          };
+        var btnMarkPaid = document.getElementById('btn-mark-paid');
+        if (btnMarkPaid)
+          btnMarkPaid.onclick = async function () {
+            if (!oid) return;
+            if (!confirm('Mark this order as fully paid (set advance equal to total)?')) return;
+            var r = await TSApi.postJson('/api/orders/' + oid + '/payments/mark-paid', {});
+            var data = await r.json().catch(function () {
+              return {};
+            });
+            if (r.ok) {
+              existingOrder = data;
+              document.getElementById('adv').value = String(data.advanceAmount);
+              recomputeTotals();
+              renderPrintBill();
+              renderOrderSlip();
+              await loadPaymentInfo();
+              alert('Order marked as fully paid.');
+            } else alert(data.error || data.message || 'Failed.');
+          };
+        var btnSyncPe = document.getElementById('btn-sync-phonepe');
+        if (btnSyncPe)
+          btnSyncPe.onclick = async function () {
+            if (!oid) return;
+            var r = await TSApi.postJson('/api/orders/' + oid + '/payments/phonepe/sync', {});
+            var data = await r.json().catch(function () {
+              return {};
+            });
+            if (r.ok) {
+              existingOrder = data;
+              document.getElementById('adv').value = String(data.advanceAmount);
+              recomputeTotals();
+              renderPrintBill();
+              renderOrderSlip();
+              await loadPaymentInfo();
+              alert('Payment status synced.');
+            } else alert(data.error || data.message || 'Sync failed.');
+          };
+
+        formEl.onsubmit = async function (e) {
+          e.preventDefault();
+          var snap = snapCache;
+          if (!snap || !Object.keys(snap).length) {
+            snap = await refreshMeasurementSnapshot();
+          }
+          if (!snap || !Object.keys(snap).length) {
+            snap = {};
+          }
+          var body = {
+            customerId: parseInt(document.getElementById('cust').value, 10),
+            garmentType: document.getElementById('gar').value,
+            measurementSnapshot: snap,
+            orderDate: document.getElementById('od').value,
+            deliveryDate: document.getElementById('dd').value,
+            status: document.getElementById('st').value,
+            advanceAmount: parseFloat(document.getElementById('adv').value) || 0,
+            notes: document.getElementById('notes').value,
+            materialsNotes: document.getElementById('mat_notes') ? document.getElementById('mat_notes').value : '',
+            demandsNotes: document.getElementById('dem_notes') ? document.getElementById('dem_notes').value : '',
+            lines: gatherLines(),
+          };
+          var res;
+          if (oid) res = await TSApi.putJson('/api/orders/' + oid, body);
+          else res = await TSApi.postJson('/api/orders', body);
+          var data = await res.json().catch(function () {
+            return {};
+          });
+          if (res.ok) {
+            if (!oid && data.id) window.location.href = '/app/order.html?id=' + data.id;
+            else {
+              existingOrder = data;
+              snapCache = parseSnapFromOrder(data);
+              recomputeTotals();
+              renderPrintBill();
+              renderOrderSlip();
+              await loadPaymentInfo();
+              alert('Saved');
+            }
+          } else alert(data.message || data.error || 'Save failed');
+        };
+
+        ['cust', 'gar', 'od', 'dd'].forEach(function (id) {
+          var n = document.getElementById(id);
+          if (n)
+            n.addEventListener('change', function () {
+              if (id === 'cust') {
+                var waPhoneEl = document.getElementById('wa-phone');
+                if (waPhoneEl) waPhoneEl.value = customerPhoneMap[String(n.value)] || '';
+              }
+              if (id === 'dd') {
+                var waDateEl = document.getElementById('wa-date');
+                if (waDateEl) waDateEl.value = n.value || '';
+              }
+              renderPrintBill();
+              renderOrderSlip();
+            });
+        });
+        recomputeTotals();
+        await loadPaymentInfo();
+        renderPrintBill();
+        renderOrderSlip();
+      });
+    </script>
+  </body>
+</html>
