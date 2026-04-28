@@ -1,13 +1,13 @@
 /**
  * Vercel serverless proxy to backend (repo-root).
  *
- * NOTE: For monorepos, Vercel functions are most reliable when placed at the repo root `/api`.
- * Configure Vercel project Root Directory = repository root (empty).
+ * CommonJS export keeps compatibility with Vercel Node runtime
+ * even when the repo isn't configured as ESM.
  *
  * Vercel env:
  * - BACKEND_URL=https://<your-render-service>.onrender.com
  */
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const base = (process.env.BACKEND_URL || process.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
   if (!base) {
     res.statusCode = 500
