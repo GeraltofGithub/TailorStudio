@@ -26,7 +26,7 @@ public class StudioUserDetails implements UserDetails, Serializable {
 
     public StudioUserDetails(User user) {
         this.userId = user.getId();
-        this.businessId = user.getBusiness().getId();
+        this.businessId = user.getBusinessId();
         this.role = user.getRole();
         this.email = user.getEmail();
         this.passwordHash = user.getPasswordHash();

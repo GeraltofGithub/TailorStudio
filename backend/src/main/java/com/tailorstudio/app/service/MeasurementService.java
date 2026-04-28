@@ -9,6 +9,7 @@ import com.tailorstudio.app.domain.Measurement;
 import com.tailorstudio.app.domain.MeasurementUnit;
 import com.tailorstudio.app.dto.MeasurementResponse;
 import com.tailorstudio.app.dto.MeasurementWriteRequest;
+import com.tailorstudio.app.mongo.SequenceService;
 import com.tailorstudio.app.repo.CustomerRepository;
 import com.tailorstudio.app.repo.MeasurementRepository;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,17 @@ public class MeasurementService {
     private final MeasurementRepository measurementRepository;
     private final CustomerRepository customerRepository;
     private final ObjectMapper objectMapper;
+    private final SequenceService seq;
 
     public MeasurementService(
             MeasurementRepository measurementRepository,
             CustomerRepository customerRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            SequenceService seq) {
         this.measurementRepository = measurementRepository;
         this.customerRepository = customerRepository;
         this.objectMapper = objectMapper;
+        this.seq = seq;
     }
 
     @Transactional(readOnly = true)
@@ -41,7 +45,7 @@ public class MeasurementService {
         verifyCustomer(businessId, customerId);
         var customer = customerRepository.findById(customerId).orElseThrow();
         MeasurementUnit def = customer.getPreferredUnit();
-        return measurementRepository.findByCustomer_IdOrderByGarmentTypeAsc(customerId).stream()
+        return measurementRepository.findByCustomerIdOrderByGarmentTypeAsc(customerId).stream()
                 .map(m -> toResponse(m, def))
                 .toList();
     }
@@ -52,7 +56,7 @@ public class MeasurementService {
         var customer = customerRepository.findById(customerId).orElseThrow();
         MeasurementUnit def = customer.getPreferredUnit();
         return measurementRepository
-                .findByCustomer_IdAndGarmentType(customerId, type)
+                .findByCustomerIdAndGarmentType(customerId, type)
                 .map(m -> toResponse(m, def))
                 .orElseGet(() -> emptyResponse(type, def));
     }
@@ -77,7 +81,7 @@ public class MeasurementService {
     public Measurement save(Long businessId, Long customerId, GarmentType garmentType, MeasurementWriteRequest req)
             throws JsonProcessingException {
         var customer = customerRepository.findById(customerId).orElseThrow();
-        if (!customer.getBusiness().getId().equals(businessId)) {
+        if (customer.getBusinessId() == null || !customer.getBusinessId().equals(businessId)) {
             throw new IllegalArgumentException("Not found");
         }
         MeasurementUnit unit;
@@ -89,10 +93,11 @@ public class MeasurementService {
         Map<String, String> values = req.values() != null ? new HashMap<>(req.values()) : new HashMap<>();
         String json = wrapJson(unit, values);
 
-        Measurement m = measurementRepository.findByCustomer_IdAndGarmentType(customerId, garmentType)
+        Measurement m = measurementRepository.findByCustomerIdAndGarmentType(customerId, garmentType)
                 .orElseGet(Measurement::new);
         if (m.getId() == null) {
-            m.setCustomer(customer);
+            m.setId(seq.next("measurements"));
+            m.setCustomerId(customerId);
             m.setGarmentType(garmentType);
         }
         m.setDataJson(json);
@@ -141,7 +146,7 @@ public class MeasurementService {
 
     private void verifyCustomer(Long businessId, Long customerId) {
         var c = customerRepository.findById(customerId).orElseThrow();
-        if (!c.getBusiness().getId().equals(businessId)) {
+        if (c.getBusinessId() == null || !c.getBusinessId().equals(businessId)) {
             throw new IllegalArgumentException("Not found");
         }
     }
