@@ -1,22 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/_proxy/(.*)",
-      "destination": "/api/_proxy/$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/_proxy/api/$1"
-    },
-    {
-      "source": "/login",
-      "destination": "/api/_proxy/login"
-    },
-    {
-      "source": "/logout",
-      "destination": "/api/_proxy/logout"
-    },
-    {
       "source": "/(.*)",
       "destination": "/"
     }

@@ -5,9 +5,15 @@ class Api {
   private _csrfToken = ''
 
   private _joinUrl(path: string) {
-    // Always same-origin.
-    // - Local dev: Vite proxies /api, /login, /logout to backend.
-    // - Production (Vercel): serverless proxy handles /api and auth endpoints.
+    // Always same-origin, but in production we must proxy through Vercel serverless
+    // to keep auth cookies first-party.
+    //
+    // Local dev: Vite proxies /api to backend directly.
+    // Production: call /api/_proxy/... explicitly (do NOT rely on vercel.json rewrites).
+    if (!path.startsWith('/')) return path
+    if (import.meta.env.DEV) return path
+    if (path === '/login' || path === '/logout') return `/api/_proxy${path}`
+    if (path.startsWith('/api/')) return `/api/_proxy${path}`
     return path
   }
 
