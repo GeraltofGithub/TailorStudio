@@ -56,7 +56,7 @@ public class MeasurementService {
         var customer = customerRepository.findById(customerId).orElseThrow();
         MeasurementUnit def = customer.getPreferredUnit();
         return measurementRepository
-                .findByCustomerIdAndGarmentType(customerId, type)
+                .findFirstByCustomerIdAndGarmentTypeOrderByUpdatedAtDesc(customerId, type)
                 .map(m -> toResponse(m, def))
                 .orElseGet(() -> emptyResponse(type, def));
     }
@@ -93,10 +93,13 @@ public class MeasurementService {
         Map<String, String> values = req.values() != null ? new HashMap<>(req.values()) : new HashMap<>();
         String json = wrapJson(unit, values);
 
-        Measurement m = measurementRepository.findByCustomerIdAndGarmentType(customerId, garmentType)
+        Measurement m = measurementRepository.findFirstByCustomerIdAndGarmentTypeOrderByUpdatedAtDesc(customerId, garmentType)
                 .orElseGet(Measurement::new);
         if (m.getId() == null) {
             m.setId(seq.next("measurements"));
+            if (m.getMongoObjectId() == null || m.getMongoObjectId().isBlank()) {
+                m.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
+            }
             m.setCustomerId(customerId);
             m.setGarmentType(garmentType);
         }

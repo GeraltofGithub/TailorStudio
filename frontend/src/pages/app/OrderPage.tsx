@@ -6,8 +6,43 @@ import { useAuth } from '../../context/AuthContext'
 import { orderSlipHtml, paymentReceiptHtml, printElement } from '../../utils/receipt'
 import { useAppToast } from '../../utils/toast'
 
-type Garment = 'SHIRT' | 'PANT' | 'BLOUSE' | 'SUIT'
+type Garment = 'SHIRT' | 'PANT' | 'BLOUSE' | 'SUIT' | 'KURTA' | 'SHERWANI' | 'INDO_WESTERN' | 'NEHRU_JACKET' | 'WAISTCOAT' | 'JODHPURI'
 type Status = 'PENDING' | 'IN_PROGRESS' | 'READY' | 'DELIVERED'
+
+type MeasurementFieldDef = { key: string; label: string; group?: string | null; hint?: string | null }
+type TemplatesMap = Record<string, MeasurementFieldDef[]>
+type MeasurementPayload = { unit: 'INCH' | 'CM'; values: Record<string, string> }
+
+function round1(n: number) {
+  return Math.round(n * 10) / 10
+}
+
+function inchToCm(inches: number) {
+  return inches * 2.54
+}
+
+function exampleInchesForField(label: string) {
+  const s = (label || '').toLowerCase()
+  if (s.includes('collar') || s.includes('neck')) return 15.5
+  if (s.includes('shoulder')) return 18
+  if (s.includes('chest')) return 40
+  if (s.includes('waist')) return 32
+  if (s.includes('seat') || s.includes('hip')) return 40
+  if (s.includes('length') && s.includes('sleeve')) return 25
+  if (s.includes('sleeve')) return 25
+  if (s.includes('shirt') && s.includes('length')) return 29
+  if (s.includes('bicep') || s.includes('upper arm')) return 13
+  if (s.includes('cuff') || s.includes('wrist')) return 7.5
+  return null
+}
+
+function placeholderFor(unit: 'INCH' | 'CM', label: string) {
+  const exIn = exampleInchesForField(label)
+  const unitLabel = unit === 'INCH' ? 'in' : 'cm'
+  if (exIn == null) return `Enter value (${unitLabel})`
+  const ex = unit === 'INCH' ? exIn : round1(inchToCm(exIn))
+  return `Enter value (e.g. ${ex} ${unitLabel})`
+}
 
 function todayISODate() {
   return new Date().toISOString().slice(0, 10)
@@ -31,6 +66,54 @@ function parseSnapFromOrder(existing: any) {
   } catch {
     return null
   }
+}
+
+function groupFields(fields: MeasurementFieldDef[]) {
+  const by: Record<string, MeasurementFieldDef[]> = {}
+  ;(fields || []).forEach((f) => {
+    const g = f.group || 'Measurements'
+    if (!by[g]) by[g] = []
+    by[g].push(f)
+  })
+  return by
+}
+
+function parsePayloadJson(dataJsonStr: string): MeasurementPayload {
+  try {
+    const o = JSON.parse(dataJsonStr || '{}') as any
+    if (o.unit && o.values) return { unit: o.unit as 'INCH' | 'CM', values: (o.values || {}) as Record<string, string> }
+    return { unit: 'INCH' as const, values: (o && typeof o === 'object' ? o : {}) as Record<string, string> }
+  } catch {
+    return { unit: 'INCH' as const, values: {} as Record<string, string> }
+  }
+}
+
+function hasAnyValues(p: MeasurementPayload | null | undefined) {
+  if (!p) return false
+  const v = p.values || {}
+  return Object.keys(v).some((k) => v[k] != null && String(v[k]).trim() !== '')
+}
+
+function isMeasurementPayload(x: any): x is MeasurementPayload {
+  return !!x && typeof x === 'object' && typeof x.unit === 'string' && x.values && typeof x.values === 'object'
+}
+
+function isOptionalField(f: MeasurementFieldDef) {
+  const g = (f.group || '').toLowerCase()
+  const h = (f.hint || '').toLowerCase()
+  const l = (f.label || '').toLowerCase()
+  return g.includes('optional') || h.includes('optional') || l.includes('(optional)')
+}
+
+function missingRequiredFields(fields: MeasurementFieldDef[], payload: MeasurementPayload) {
+  const vals = payload?.values || {}
+  const missing: MeasurementFieldDef[] = []
+  for (const f of fields || []) {
+    if (isOptionalField(f)) continue
+    const v = vals[f.key]
+    if (v == null || String(v).trim() === '') missing.push(f)
+  }
+  return missing
 }
 
 export default memo(function OrderPage() {
@@ -65,6 +148,10 @@ export default memo(function OrderPage() {
 
   const [snapCache, setSnapCache] = useState<any>(null)
   const [snapPreview, setSnapPreview] = useState<string>('')
+  const [templates, setTemplates] = useState<TemplatesMap>({})
+  const [measureDraft, setMeasureDraft] = useState<MeasurementPayload>({ unit: 'INCH', values: {} })
+  const [measureEditorOpen, setMeasureEditorOpen] = useState(false)
+  const [pendingProfileSave, setPendingProfileSave] = useState(false)
 
   const [waPhone, setWaPhone] = useState('')
   const [waDate, setWaDate] = useState('')
@@ -76,6 +163,8 @@ export default memo(function OrderPage() {
   const [payModalOpen, setPayModalOpen] = useState(false)
   const [payStep, setPayStep] = useState<'choice' | 'cash' | 'online'>('choice')
   const [payCashAmt, setPayCashAmt] = useState<string>('')
+  const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const receiptPayRef = useRef<HTMLDivElement | null>(null)
   const orderSlipRef = useRef<HTMLDivElement | null>(null)
@@ -96,7 +185,13 @@ export default memo(function OrderPage() {
         const o = await appService.orders.get(oid)
         if (!alive) return
         setExistingOrder(o)
-        setSnapCache(parseSnapFromOrder(o))
+        const snap = parseSnapFromOrder(o)
+        setSnapCache(snap)
+        if (isMeasurementPayload(snap)) {
+          setSnapPreview(JSON.stringify(snap, null, 2))
+        } else {
+          setSnapPreview('')
+        }
       } catch {
         setOrderMissing(true)
         return
@@ -110,7 +205,7 @@ export default memo(function OrderPage() {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const list = await appService.customers.list()
+      const list = await appService.customers.listActive()
       if (!alive) return
       setCustomers(list || [])
       const map: Record<string, string> = {}
@@ -118,6 +213,23 @@ export default memo(function OrderPage() {
         map[String(c.id)] = c.phone || ''
       })
       setCustomerPhoneMap(map)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      let t: TemplatesMap = {}
+      try {
+        t = (await appService.customers.templates()) as TemplatesMap
+      } catch {
+        t = {}
+      }
+      if (!alive) return
+      setTemplates(t || {})
     })()
     return () => {
       alive = false
@@ -207,9 +319,13 @@ export default memo(function OrderPage() {
         return ''
       }
     }
-    if (existingOrder && existingOrder.measurementSnapshotJson) return existingOrder.measurementSnapshotJson
+    // Only use persisted snapshot if it belongs to the currently selected garment.
+    // Prevents showing SHIRT measurements when user selects PANT, etc.
+    if (existingOrder && existingOrder.measurementSnapshotJson && String(existingOrder.garmentType || '') === String(garmentType || '')) {
+      return existingOrder.measurementSnapshotJson
+    }
     return ''
-  }, [existingOrder, snapCache])
+  }, [existingOrder, garmentType, snapCache])
 
   const renderReceipts = useCallback(() => {
     const snLabel = existingOrder?.serialNumber ? `#${existingOrder.serialNumber}` : 'Draft'
@@ -280,21 +396,57 @@ export default memo(function OrderPage() {
     void loadPaymentInfo()
   }, [loadPaymentInfo])
 
-  const refreshMeasurementSnapshot = useCallback(async () => {
-    if (!customerId) return {}
-    const m = await appService.customers.getMeasurement(Number(customerId), garmentType)
-    try {
-      return JSON.parse(m?.dataJson || '{}')
-    } catch {
-      return {}
-    }
+  useEffect(() => {
+    // Only clear staged measurements for NEW orders.
+    // For existing orders, keep the saved snapshot visible (no need to copy again).
+    if (oid || existingOrder) return
+    setMeasureEditorOpen(false)
+    setSnapPreview('')
+    setSnapCache(null)
   }, [customerId, garmentType])
 
   const pullMeasurements = useCallback(async () => {
-    const snap = await refreshMeasurementSnapshot()
-    setSnapCache(snap)
-    setSnapPreview(JSON.stringify(snap, null, 2))
-  }, [refreshMeasurementSnapshot])
+    if (!customerId) {
+      toast.error('Select a customer first.')
+      return
+    }
+    try {
+      const m = await appService.customers.getMeasurement(Number(customerId), garmentType)
+      const payload = parsePayloadJson(String(m?.dataJson || '{}'))
+      if (!hasAnyValues(payload)) {
+        setMeasureDraft(payload)
+        setMeasureEditorOpen(true)
+        setPendingProfileSave(true)
+        toast.error(`No saved ${garmentType} measurements for this customer. Enter now.`)
+        return
+      }
+      setMeasureDraft(payload)
+      setSnapCache(payload)
+      setSnapPreview(JSON.stringify(payload, null, 2))
+      toast.success(`Copied ${garmentType} measurements`)
+    } catch (e: any) {
+      const msg = e?.payload?.message || e?.payload?.error || e?.message
+      toast.error(msg ? String(msg) : 'Could not copy measurements. Please try again.')
+    }
+  }, [customerId, garmentType, toast])
+
+  const saveMeasurementsToProfile = useCallback(async () => {
+    if (!customerId) {
+      toast.error('Select a customer first.')
+      return
+    }
+    const reqMissing = missingRequiredFields(templates[garmentType] || [], measureDraft)
+    if (reqMissing.length) {
+      toast.error(`Please fill required fields: ${reqMissing.slice(0, 4).map((x) => x.label).join(', ')}${reqMissing.length > 4 ? '…' : ''}`)
+      return
+    }
+    // IMPORTANT: do not persist to DB until the order is successfully created/updated.
+    setSnapCache(measureDraft)
+    setSnapPreview(JSON.stringify(measureDraft, null, 2))
+    setMeasureEditorOpen(false)
+    setPendingProfileSave(true)
+    toast.success(`${garmentType} measurements added to order`)
+  }, [customerId, garmentType, measureDraft, templates, toast])
 
   const waMessageText = useCallback(() => {
     const custOpt = customers.find((c) => String(c.id) === String(customerId))
@@ -308,6 +460,13 @@ export default memo(function OrderPage() {
     return parts.join('\n')
   }, [customers, customerId, deliveryDate, garmentType, studio.name, totals, waDate, waIncDate, waIncPay])
 
+  const billDescTouchedRef = useRef(false)
+  useEffect(() => {
+    // keep default bill description aligned to selected garment, unless user edited it
+    if (billDescTouchedRef.current) return
+    setBillDesc(`${garmentType} — tailoring`)
+  }, [garmentType])
+
   const onSubmitSave = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     if (savingRef.current) return
@@ -315,10 +474,31 @@ export default memo(function OrderPage() {
       toast.error('Order completed. Delivered orders cannot be updated.')
       return
     }
+
+    if (!customerId) {
+      toast.error('Select a customer.')
+      return
+    }
+    const totalNum = parseFloat(billTotal)
+    if (!Number.isFinite(totalNum) || totalNum <= 0) {
+      toast.error('Enter total charge (must be greater than 0).')
+      return
+    }
+
+    // Measurements are mandatory for creating/updating an order.
+    // User must explicitly copy from customer profile OR save from the measurement modal.
+    if (measureEditorOpen) {
+      toast.error(`Save ${garmentType} measurements first, then create the order.`)
+      return
+    }
+    const snap = snapCache
+    if (!isMeasurementPayload(snap) || !hasAnyValues(snap)) {
+      toast.error(`Copy or enter ${garmentType} measurements before saving the order.`)
+      return
+    }
+
     savingRef.current = true
-    let snap = snapCache
-    if (!snap || !Object.keys(snap).length) snap = await refreshMeasurementSnapshot()
-    if (!snap || !Object.keys(snap).length) snap = {}
+    setSaving(true)
 
     const body = {
       customerId: parseInt(customerId, 10),
@@ -338,6 +518,13 @@ export default memo(function OrderPage() {
       const beforeStatus = existingOrder?.status as Status | undefined
       const data = oid ? await appService.orders.update(oid, body) : await appService.orders.create(body)
       if (!oid && (data as any).id) {
+        // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
+        if (pendingProfileSave && isMeasurementPayload(snap)) {
+          await appService.customers
+            .saveMeasurement(Number(customerId), garmentType, { unit: snap.unit, values: snap.values })
+            .catch(() => null)
+          setPendingProfileSave(false)
+        }
         nav(`/app/order?id=${(data as any).id}`)
         toast.success('Order created')
         const st = (data as any)?.status as Status | undefined
@@ -357,11 +544,19 @@ export default memo(function OrderPage() {
         if (afterStatus === 'READY') toast.success('Work status: Ready')
         if (afterStatus === 'DELIVERED') toast.success('Work status: Delivered')
       }
+      // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
+      if (pendingProfileSave && isMeasurementPayload(snap)) {
+        await appService.customers
+          .saveMeasurement(Number(customerId), garmentType, { unit: snap.unit, values: snap.values })
+          .catch(() => null)
+        setPendingProfileSave(false)
+      }
     } catch (e: any) {
       const msg = e?.payload?.message || e?.payload?.error || e?.message
       toast.error(msg ? String(msg) : 'Could not save order. Please try again.')
     } finally {
       savingRef.current = false
+      setSaving(false)
     }
   }, [
     advance,
@@ -369,16 +564,19 @@ export default memo(function OrderPage() {
     demNotes,
     deliveryDate,
     garmentType,
+    billTotal,
     gatherLines,
     existingOrder?.status,
     isCompleted,
     loadPaymentInfo,
     matNotes,
+    measureEditorOpen,
+    pendingProfileSave,
+    templates,
     nav,
     notes,
     oid,
     orderDate,
-    refreshMeasurementSnapshot,
     snapCache,
     status,
     toast,
@@ -440,6 +638,7 @@ export default memo(function OrderPage() {
                     id="cust"
                     required
                     value={customerId}
+                    disabled={isCompleted}
                     onChange={(e) => {
                       setCustomerId(e.target.value)
                       setWaPhone(customerPhoneMap[String(e.target.value)] || '')
@@ -455,8 +654,13 @@ export default memo(function OrderPage() {
                 </div>
                 <div>
                   <label>Garment</label>
-                  <select id="gar" value={garmentType} onChange={(e) => setGarmentType(e.target.value as Garment)}>
-                    {(['SHIRT', 'PANT', 'BLOUSE', 'SUIT'] as Garment[]).map((g) => (
+                  <select
+                    id="gar"
+                    value={garmentType}
+                    disabled={isCompleted || !!oid || !!existingOrder}
+                    onChange={(e) => setGarmentType(e.target.value as Garment)}
+                  >
+                    {(['SHIRT', 'PANT', 'BLOUSE', 'SUIT', 'KURTA', 'SHERWANI', 'INDO_WESTERN', 'NEHRU_JACKET', 'WAISTCOAT', 'JODHPURI'] as Garment[]).map((g) => (
                       <option key={g} value={g}>
                         {g}
                       </option>
@@ -468,7 +672,14 @@ export default memo(function OrderPage() {
               <div className="form-grid two">
                 <div>
                   <label>Order taken on</label>
-                  <input id="od" type="date" required value={orderDate} onChange={(e) => setOrderDate(e.target.value)} />
+                  <input
+                    id="od"
+                    type="date"
+                    required
+                    value={orderDate}
+                    disabled={isCompleted}
+                    onChange={(e) => setOrderDate(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label>Ready / delivery by</label>
@@ -477,6 +688,7 @@ export default memo(function OrderPage() {
                     type="date"
                     required
                     value={deliveryDate}
+                    disabled={isCompleted}
                     onChange={(e) => {
                       setDeliveryDate(e.target.value)
                       setWaDate(e.target.value)
@@ -487,9 +699,12 @@ export default memo(function OrderPage() {
 
               <div className="form-grid two">
                 <div>
-                  <label>Work status</label>
+                  <label>
+                    Work status<span className="req-star">*</span>
+                  </label>
                   <select
                     id="st"
+                    required
                     value={status}
                     disabled={isCompleted}
                     onChange={(e) => {
@@ -509,8 +724,19 @@ export default memo(function OrderPage() {
                   </select>
                 </div>
                 <div>
-                  <label>Advance taken (₹)</label>
-                  <input id="adv" type="number" step="0.01" min={0} value={advance} placeholder="0" onChange={(e) => setAdvance(e.target.value)} />
+                  <label>
+                    Advance taken (₹)<span className="req-star">*</span>
+                  </label>
+                  <input
+                    id="adv"
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={advance}
+                    placeholder="0"
+                    disabled={isCompleted}
+                    onChange={(e) => setAdvance(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -521,8 +747,19 @@ export default memo(function OrderPage() {
                 <div style={{ padding: '1rem 1.25rem' }}>
                   <div className="form-grid two">
                     <div>
-                      <label>Total charge for this job (₹)</label>
-                      <input id="bill-total" type="number" step="0.01" min={0} value={billTotal} placeholder="e.g. 1500" onChange={(e) => setBillTotal(e.target.value)} />
+                      <label>
+                        Total charge for this job (₹)<span className="req-star">*</span>
+                      </label>
+                      <input
+                        id="bill-total"
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={billTotal}
+                        placeholder="e.g. 1500"
+                        disabled={isCompleted}
+                        onChange={(e) => setBillTotal(e.target.value)}
+                      />
                     </div>
                     <div>
                       <label>What it&apos;s for (on bill)</label>
@@ -531,7 +768,11 @@ export default memo(function OrderPage() {
                         type="text"
                         value={billDesc}
                         placeholder="e.g. Shirt — full stitching"
-                        onChange={(e) => setBillDesc(e.target.value)}
+                        disabled={isCompleted}
+                        onChange={(e) => {
+                          billDescTouchedRef.current = true
+                          setBillDesc(e.target.value)
+                        }}
                       />
                     </div>
                   </div>
@@ -545,11 +786,26 @@ export default memo(function OrderPage() {
                     <div className="form-grid two">
                       <div>
                         <label>Extra description</label>
-                        <input id="extra-desc" type="text" value={extraDesc} placeholder="Optional" onChange={(e) => setExtraDesc(e.target.value)} />
+                        <input
+                          id="extra-desc"
+                          type="text"
+                          value={extraDesc}
+                          placeholder="Optional"
+                          disabled={isCompleted}
+                          onChange={(e) => setExtraDesc(e.target.value)}
+                        />
                       </div>
                       <div>
                         <label>Extra amount (₹)</label>
-                        <input id="extra-amt" type="number" step="0.01" min={0} value={extraAmt} onChange={(e) => setExtraAmt(e.target.value)} />
+                        <input
+                          id="extra-amt"
+                          type="number"
+                          step="0.01"
+                          min={0}
+                          value={extraAmt}
+                          disabled={isCompleted}
+                          onChange={(e) => setExtraAmt(e.target.value)}
+                        />
                       </div>
                     </div>
                   </div>
@@ -559,6 +815,7 @@ export default memo(function OrderPage() {
                     className="btn btn-ghost btn-sm"
                     id="toggle-extra"
                     style={{ marginTop: '0.75rem' }}
+                    disabled={isCompleted}
                     onClick={() => {
                       setExtraEnabled((v) => {
                         const next = !v
@@ -621,17 +878,7 @@ export default memo(function OrderPage() {
                             id="btn-mark-paid"
                             onClick={async () => {
                               if (!oid) return
-                              if (!confirm('Mark this order as fully paid (set advance equal to total)?')) return
-                              try {
-                                const data = await appService.orders.markPaid(oid)
-                                setExistingOrder(data)
-                                setAdvance(String((data as any).advanceAmount))
-                                await loadPaymentInfo()
-                                toast.success('Order marked as fully paid')
-                              } catch (e: any) {
-                                const msg = e?.payload?.error || e?.payload?.message || e?.message
-                                toast.error(msg ? String(msg) : 'Failed to mark order as paid. Please try again.')
-                              }
+                              setMarkPaidConfirmOpen(true)
                             }}
                           >
                             Mark fully paid
@@ -681,29 +928,53 @@ export default memo(function OrderPage() {
                 <div style={{ padding: '1rem 1.25rem' }} className="form-grid ts-app-form">
                   <div>
                     <label>Materials & cloth</label>
-                    <textarea id="mat_notes" rows={2} placeholder="Fabric, colour, lining, buttons, supplies…" value={matNotes} onChange={(e) => setMatNotes(e.target.value)} />
+                    <textarea
+                      id="mat_notes"
+                      rows={2}
+                      placeholder="Fabric, colour, lining, buttons, supplies…"
+                      value={matNotes}
+                      disabled={isCompleted}
+                      onChange={(e) => setMatNotes(e.target.value)}
+                    />
                   </div>
                   <div>
                     <label>Customer requests & demands</label>
-                    <textarea id="dem_notes" rows={2} placeholder="Fitting preferences, deadlines, special instructions…" value={demNotes} onChange={(e) => setDemNotes(e.target.value)} />
+                    <textarea
+                      id="dem_notes"
+                      rows={2}
+                      placeholder="Fitting preferences, deadlines, special instructions…"
+                      value={demNotes}
+                      disabled={isCompleted}
+                      onChange={(e) => setDemNotes(e.target.value)}
+                    />
                   </div>
                   <div>
                     <label>Workshop notes</label>
-                    <textarea id="notes" rows={2} placeholder="Internal reminders, fitting notes…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    <textarea
+                      id="notes"
+                      rows={2}
+                      placeholder="Internal reminders, fitting notes…"
+                      value={notes}
+                      disabled={isCompleted}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
 
               <div className="panel" style={{ marginTop: '1rem' }}>
                 <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>Measurements on this order</h2>
-                  <button type="button" className="btn btn-teal btn-sm" id="pullM" onClick={() => void pullMeasurements()}>
+                  <h2 style={{ fontSize: '1rem' }}>
+                    Measurements on this order<span className="req-star">*</span>
+                  </h2>
+                  <button type="button" className="btn btn-teal btn-sm" id="pullM" disabled={isCompleted} onClick={() => void pullMeasurements()}>
                     Copy from customer profile
                   </button>
                 </div>
                 <div style={{ padding: '1rem 1.25rem', color: 'var(--muted)', fontSize: '0.88rem' }}>
-                  Uses saved sizes for the customer and garment above. Click after selecting both.
+                  Uses saved sizes for the customer and <strong>{garmentType}</strong>. This is required to create the order.
                 </div>
+                {/* measurement entry happens in a modal */}
                 <pre
                   id="snap-preview"
                   style={{
@@ -734,19 +1005,26 @@ export default memo(function OrderPage() {
                   <div className="form-grid two">
                     <div>
                       <label>Notify customer phone</label>
-                      <input id="wa-phone" type="text" placeholder="Customer phone" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
+                      <input
+                        id="wa-phone"
+                        type="text"
+                        placeholder="Customer phone"
+                        value={waPhone}
+                        disabled={isCompleted}
+                        onChange={(e) => setWaPhone(e.target.value)}
+                      />
                     </div>
                     <div>
                       <label>Expected delivery date</label>
-                      <input id="wa-date" type="date" value={waDate} onChange={(e) => setWaDate(e.target.value)} />
+                      <input id="wa-date" type="date" value={waDate} disabled={isCompleted} onChange={(e) => setWaDate(e.target.value)} />
                     </div>
                   </div>
                   <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                     <label style={{ margin: 0, textTransform: 'none', letterSpacing: 'normal', fontSize: '0.88rem' }}>
-                      <input id="wa-inc-pay" type="checkbox" checked={waIncPay} onChange={(e) => setWaIncPay(e.target.checked)} /> Include payment summary
+                      <input id="wa-inc-pay" type="checkbox" checked={waIncPay} disabled={isCompleted} onChange={(e) => setWaIncPay(e.target.checked)} /> Include payment summary
                     </label>
                     <label style={{ margin: 0, textTransform: 'none', letterSpacing: 'normal', fontSize: '0.88rem' }}>
-                      <input id="wa-inc-date" type="checkbox" checked={waIncDate} onChange={(e) => setWaIncDate(e.target.checked)} /> Include expected delivery date
+                      <input id="wa-inc-date" type="checkbox" checked={waIncDate} disabled={isCompleted} onChange={(e) => setWaIncDate(e.target.checked)} /> Include expected delivery date
                     </label>
                   </div>
                   <button
@@ -754,6 +1032,7 @@ export default memo(function OrderPage() {
                     className="btn btn-teal btn-sm"
                     id="wa-preview-btn"
                     style={{ marginTop: '0.75rem' }}
+                    disabled={isCompleted}
                     onClick={() => {
                       const msg = waMessageText()
                       setWaPreview(msg)
@@ -766,6 +1045,7 @@ export default memo(function OrderPage() {
                     className="btn btn-ghost btn-sm"
                     id="wa-send-btn"
                     style={{ marginTop: '0.75rem' }}
+                    disabled={isCompleted}
                     onClick={() => {
                       const p = (waPhone || '').trim()
                       if (!p) {
@@ -785,8 +1065,13 @@ export default memo(function OrderPage() {
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isCompleted}>
-                {!oid ? 'Create order' : isCompleted ? 'Order completed' : 'Update order'}
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ marginTop: '1rem', opacity: isCompleted || saving ? 0.75 : 1 }}
+                disabled={isCompleted || saving}
+              >
+                {!oid ? (saving ? 'Creating…' : 'Create order') : isCompleted ? 'Order completed' : saving ? 'Updating…' : 'Update order'}
               </button>
             </div>
           </div>
@@ -917,6 +1202,169 @@ export default memo(function OrderPage() {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      </div>
+
+      {/* Mark fully paid confirm modal */}
+      <div
+        id="mark-paid-modal"
+        className="no-print"
+        style={{
+          display: markPaidConfirmOpen ? 'flex' : 'none',
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 1000,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setMarkPaidConfirmOpen(false)
+        }}
+      >
+        <div className="panel pay-modal-shell" style={{ margin: 0, position: 'relative', width: 'min(560px, 100%)' }}>
+          <div className="pay-modal-body">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}
+              aria-label="Close"
+              onClick={() => setMarkPaidConfirmOpen(false)}
+            >
+              ✕
+            </button>
+            <h3 style={{ marginTop: 0 }}>Mark fully paid?</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.92rem' }}>
+              This will set <strong>Advance received</strong> equal to <strong>Job total</strong>.
+            </p>
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={async () => {
+                  if (!oid) return
+                  try {
+                    const data = await appService.orders.markPaid(oid)
+                    setExistingOrder(data)
+                    setAdvance(String((data as any).advanceAmount))
+                    setMarkPaidConfirmOpen(false)
+                    await loadPaymentInfo()
+                    toast.success('Order marked as fully paid')
+                  } catch (e: any) {
+                    const msg = e?.payload?.error || e?.payload?.message || e?.message
+                    toast.error(msg ? String(msg) : 'Failed to mark order as paid. Please try again.')
+                  }
+                }}
+              >
+                Confirm
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setMarkPaidConfirmOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Measurements modal (shown only when customer has no saved measurements for selected garment) */}
+      <div
+        id="measure-modal"
+        className="no-print"
+        style={{
+          display: measureEditorOpen ? 'flex' : 'none',
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 1000,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setMeasureEditorOpen(false)
+        }}
+      >
+        <div className="panel pay-modal-shell" style={{ margin: 0, position: 'relative', width: 'min(920px, 100%)' }}>
+          <div className="pay-modal-body" style={{ maxHeight: '82vh', overflow: 'auto' }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}
+              aria-label="Close"
+              onClick={() => setMeasureEditorOpen(false)}
+            >
+              ✕
+            </button>
+
+            <h3 style={{ marginTop: 0 }}>Enter {garmentType} measurements</h3>
+            <p style={{ margin: '0 0 0.75rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
+              This customer doesn&apos;t have saved <strong>{garmentType}</strong> measurements yet. Save once to reuse next time.
+            </p>
+
+            <div className="ts-app-form">
+              <div className="unit-toggle" style={{ marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Unit</span>
+                <label>
+                  <input
+                    type="radio"
+                    name="ord-unit"
+                    value="INCH"
+                    checked={measureDraft.unit === 'INCH'}
+                    onChange={() => setMeasureDraft((p) => ({ ...p, unit: 'INCH' }))}
+                  />{' '}
+                  in
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="ord-unit"
+                    value="CM"
+                    checked={measureDraft.unit === 'CM'}
+                    onChange={() => setMeasureDraft((p) => ({ ...p, unit: 'CM' }))}
+                  />{' '}
+                  cm
+                </label>
+              </div>
+
+              {(Object.entries(groupFields(templates[garmentType] || [])) || []).map(([gn, fs]) => (
+                <div key={gn}>
+                  <div className="measurement-group-title">{gn}</div>
+                  <div className="form-grid two">
+                    {fs.map((f) => {
+                      const v = measureDraft.values[f.key] != null ? String(measureDraft.values[f.key]) : ''
+                      return (
+                        <div key={f.key}>
+                          <label>
+                            {f.label}
+                            <span className="req-star">*</span>
+                          </label>
+                          {f.hint ? <p className="field-hint">{f.hint}</p> : null}
+                          <input
+                            type="text"
+                            value={v}
+                            placeholder={placeholderFor(measureDraft.unit, f.label)}
+                            onChange={(e) =>
+                              setMeasureDraft((p) => ({ ...p, values: { ...p.values, [f.key]: e.target.value } }))
+                            }
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                <button type="button" className="btn btn-primary" onClick={() => void saveMeasurementsToProfile()}>
+                  Save {garmentType} to customer
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setMeasureEditorOpen(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

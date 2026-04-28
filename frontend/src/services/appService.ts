@@ -11,9 +11,12 @@ class AppService {
 
   customers = {
     list: (q?: string) => customersApi.list(q),
+    listActive: (q?: string) => customersApi.listActive(q),
     get: (id: number) => customersApi.get(id),
     create: (data: Parameters<typeof customersApi.create>[0]) => customersApi.create(data),
     update: (id: number, data: Parameters<typeof customersApi.update>[1]) => customersApi.update(id, data),
+    disable: (id: number) => customersApi.disable(id),
+    enable: (id: number) => customersApi.enable(id),
     orders: (id: number) => customersApi.orders(id),
     templates: () => customersApi.templates(),
     getMeasurement: (id: number, garment: string) => customersApi.getMeasurement(id, garment),

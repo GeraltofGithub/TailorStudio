@@ -4,8 +4,32 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { appService } from '../../services/appService'
 import { useAppToast } from '../../utils/toast'
 
-type Garment = 'SHIRT' | 'PANT' | 'BLOUSE' | 'SUIT'
-const GARMENTS: Garment[] = ['SHIRT', 'PANT', 'BLOUSE', 'SUIT']
+type Garment =
+  | 'SHIRT'
+  | 'PANT'
+  | 'BLOUSE'
+  | 'SUIT'
+  | 'KURTA'
+  | 'SHERWANI'
+  | 'INDO_WESTERN'
+  | 'NEHRU_JACKET'
+  | 'WAISTCOAT'
+  | 'JODHPURI'
+  | 'ACCESSORIES'
+
+const GARMENTS: Garment[] = [
+  'SHIRT',
+  'PANT',
+  'BLOUSE',
+  'SUIT',
+  'KURTA',
+  'SHERWANI',
+  'INDO_WESTERN',
+  'NEHRU_JACKET',
+  'WAISTCOAT',
+  'JODHPURI',
+  'ACCESSORIES',
+]
 
 type MeasurementFieldDef = { key: string; label: string; group?: string | null; hint?: string | null }
 type TemplatesMap = Record<string, MeasurementFieldDef[]>
@@ -63,6 +87,24 @@ function parsePayloadJson(dataJsonStr: string) {
   }
 }
 
+function isOptionalField(f: MeasurementFieldDef) {
+  const g = (f.group || '').toLowerCase()
+  const h = (f.hint || '').toLowerCase()
+  const l = (f.label || '').toLowerCase()
+  return g.includes('optional') || h.includes('optional') || l.includes('(optional)')
+}
+
+function missingRequiredFields(fields: MeasurementFieldDef[], payload: MeasurementPayload) {
+  const vals = payload?.values || {}
+  const missing: MeasurementFieldDef[] = []
+  for (const f of fields || []) {
+    if (isOptionalField(f)) continue
+    const v = vals[f.key]
+    if (v == null || String(v).trim() === '') missing.push(f)
+  }
+  return missing
+}
+
 function MeasureEditor({
   garment,
   fields,
@@ -113,7 +155,10 @@ function MeasureEditor({
               const v = payload.values[f.key] != null ? String(payload.values[f.key]) : ''
               return (
                 <div key={f.key}>
-                  <label>{f.label}</label>
+                  <label>
+                    {f.label}
+                    <span className="req-star">*</span>
+                  </label>
                   {f.hint ? <p className="field-hint">{f.hint}</p> : null}
                   <input
                     type="text"
@@ -153,6 +198,13 @@ export default memo(function CustomerPage() {
     PANT: { unit: 'INCH', values: {} },
     BLOUSE: { unit: 'INCH', values: {} },
     SUIT: { unit: 'INCH', values: {} },
+    KURTA: { unit: 'INCH', values: {} },
+    SHERWANI: { unit: 'INCH', values: {} },
+    INDO_WESTERN: { unit: 'INCH', values: {} },
+    NEHRU_JACKET: { unit: 'INCH', values: {} },
+    WAISTCOAT: { unit: 'INCH', values: {} },
+    JODHPURI: { unit: 'INCH', values: {} },
+    ACCESSORIES: { unit: 'INCH', values: {} },
   }))
   const [newActiveGarment, setNewActiveGarment] = useState<Garment>('SHIRT')
 
@@ -217,16 +269,23 @@ export default memo(function CustomerPage() {
     void loadMeasurement('SHIRT')
   }, [cid, loadMeasurement])
 
+  const activeFields = useMemo(() => templates[activeGarment] || [], [activeGarment, templates])
+
   const saveMeasurement = useCallback(async () => {
     if (!cid) return
     const g = activeGarment
+    const reqMissing = missingRequiredFields(activeFields || [], activePayload)
+    if (reqMissing.length) {
+      toast.error(`Please fill required fields: ${reqMissing.slice(0, 4).map((x) => x.label).join(', ')}${reqMissing.length > 4 ? '…' : ''}`)
+      return
+    }
     try {
       await appService.customers.saveMeasurement(cid, g, { unit: activePayload.unit, values: activePayload.values })
       toast.success('Measurements saved')
     } catch {
       toast.error('Could not save measurements. Please try again.')
     }
-  }, [activeGarment, activePayload, cid, toast])
+  }, [activeFields, activeGarment, activePayload, cid, toast])
 
   const saveCustomerDetails = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -379,7 +438,7 @@ export default memo(function CustomerPage() {
   if (!customer) return <p>Customer not found.</p>
 
   const pu = String(customer.preferredUnit || 'INCH')
-  const fields = templates[activeGarment] || []
+  const fields = activeFields
 
   return (
     <>

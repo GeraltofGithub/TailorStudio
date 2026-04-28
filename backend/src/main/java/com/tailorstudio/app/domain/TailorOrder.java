@@ -1,6 +1,7 @@
 package com.tailorstudio.app.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -18,6 +19,8 @@ public class TailorOrder {
 
     @Id
     private Long id;
+
+    private String mongoObjectId = new ObjectId().toHexString();
 
     @Indexed
     private Long businessId;
@@ -77,6 +80,14 @@ public class TailorOrder {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getMongoObjectId() {
+        return mongoObjectId;
+    }
+
+    public void setMongoObjectId(String mongoObjectId) {
+        this.mongoObjectId = mongoObjectId;
     }
 
     public Business getBusiness() {

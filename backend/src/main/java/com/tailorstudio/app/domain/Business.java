@@ -3,6 +3,7 @@ package com.tailorstudio.app.domain;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.bson.types.ObjectId;
 
 import java.time.Instant;
 
@@ -11,6 +12,8 @@ public class Business {
 
     @Id
     private Long id;
+
+    private String mongoObjectId = new ObjectId().toHexString();
 
     private String name;
 
@@ -36,6 +39,14 @@ public class Business {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getMongoObjectId() {
+        return mongoObjectId;
+    }
+
+    public void setMongoObjectId(String mongoObjectId) {
+        this.mongoObjectId = mongoObjectId;
     }
 
     public String getName() {

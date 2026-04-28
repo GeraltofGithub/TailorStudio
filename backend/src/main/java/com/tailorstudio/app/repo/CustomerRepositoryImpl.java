@@ -37,5 +37,26 @@ public class CustomerRepositoryImpl implements CustomerRepositoryCustom {
         query.with(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
         return mongo.find(query, Customer.class);
     }
+
+    @Override
+    public List<Customer> searchActive(Long businessId, String q) {
+        String raw = q == null ? "" : q.trim();
+        Criteria active = Criteria.where("active").ne(false); // include null as active
+        if (raw.isEmpty()) {
+            Query all = new Query(new Criteria().andOperator(Criteria.where("businessId").is(businessId), active));
+            all.with(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
+            return mongo.find(all, Customer.class);
+        }
+
+        Pattern nameLike = Pattern.compile(Pattern.quote(raw), Pattern.CASE_INSENSITIVE);
+        Criteria base = Criteria.where("businessId").is(businessId);
+        Criteria match = new Criteria().orOperator(
+                Criteria.where("name").regex(nameLike),
+                Criteria.where("phone").regex(Pattern.compile(Pattern.quote(raw)))
+        );
+        Query query = new Query(new Criteria().andOperator(base, active, match));
+        query.with(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
+        return mongo.find(query, Customer.class);
+    }
 }
 

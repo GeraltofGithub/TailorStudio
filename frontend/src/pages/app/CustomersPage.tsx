@@ -2,19 +2,26 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { Pagination } from '../../components/Pagination'
+import { useAppToast } from '../../utils/toast'
+import { Eye, ShieldCheck, ShieldOff } from 'lucide-react'
 
 type Customer = {
   id: number
   name: string
   phone: string
   address?: string | null
+  active?: boolean
 }
 
 export default memo(function CustomersPage() {
   const [sp] = useSearchParams()
   const q = sp.get('q') || ''
   const nav = useNavigate()
+  const toast = useAppToast()
   const [list, setList] = useState<Customer[]>([])
+  const [page, setPage] = useState(1)
+  const pageSize = 15
 
   useEffect(() => {
     let alive = true
@@ -28,7 +35,15 @@ export default memo(function CustomersPage() {
     }
   }, [q])
 
+  useEffect(() => {
+    setPage(1)
+  }, [q])
+
   const rows = useMemo(() => list, [list])
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return rows.slice(start, start + pageSize)
+  }, [page, pageSize, rows])
 
   return (
     <>
@@ -84,15 +99,54 @@ export default memo(function CustomersPage() {
                   <td colSpan={4}>No customers yet.</td>
                 </tr>
               ) : (
-                rows.map((c) => (
-                  <tr key={c.id}>
+                pagedRows.map((c) => (
+                  <tr key={c.id} style={{ opacity: c.active === false ? 0.55 : 1 }}>
                     <td>{c.name}</td>
                     <td>{c.phone}</td>
                     <td>{c.address || '—'}</td>
                     <td>
-                      <Link className="btn btn-teal btn-sm" to={`/app/customer?id=${c.id}`}>
-                        Profile
-                      </Link>
+                      <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        <Link className="btn btn-teal btn-sm ts-icon-btn" to={`/app/customer?id=${c.id}`} aria-label="View profile">
+                          <Eye size={16} />
+                        </Link>
+                        {c.active === false ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm ts-icon-btn"
+                            aria-label="Enable customer"
+                            onClick={async () => {
+                              try {
+                                await appService.customers.enable(c.id)
+                                setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: true } : x)))
+                                toast.success('Customer enabled')
+                              } catch (e: any) {
+                                const msg = e?.payload?.message || e?.payload?.error || e?.message
+                                toast.error(msg ? String(msg) : 'Could not enable customer. Please try again.')
+                              }
+                            }}
+                          >
+                            <ShieldCheck size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm ts-icon-btn"
+                            aria-label="Disable customer"
+                            onClick={async () => {
+                              try {
+                                await appService.customers.disable(c.id)
+                                setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: false } : x)))
+                                toast.success('Customer disabled')
+                              } catch (e: any) {
+                                const msg = e?.payload?.message || e?.payload?.error || e?.message
+                                toast.error(msg ? String(msg) : 'Could not disable customer. Please try again.')
+                              }
+                            }}
+                          >
+                            <ShieldOff size={16} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -100,6 +154,7 @@ export default memo(function CustomersPage() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} pageSize={pageSize} total={rows.length} onPageChange={setPage} />
       </div>
     </>
   )
