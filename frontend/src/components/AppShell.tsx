@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, Navigate } from 'react-router-dom'
 
 import { useAuth } from '../context/AuthContext'
 import { useAppToast } from '../utils/toast'
+import { BASE_URL } from '../utils/constants'
 
 type NavItem = { href: string; id: string; label: string; icon: string }
 
@@ -55,14 +56,14 @@ export const AppShell = memo(function AppShell() {
     async function ensureCsrfCookie() {
       let csrf = Cookies.get('XSRF-TOKEN') || ''
       if (!csrf) {
-        await fetch('/api/me', { credentials: 'include', cache: 'no-store' }).catch(() => null)
+        await fetch(`${BASE_URL}/api/me`, { credentials: 'include', cache: 'no-store' }).catch(() => null)
         csrf = Cookies.get('XSRF-TOKEN') || ''
       }
       return csrf
     }
 
     async function postLogout(csrf: string) {
-      return fetch('/logout', {
+      return fetch(`${BASE_URL}/logout`, {
         method: 'POST',
         credentials: 'include',
         headers: csrf
@@ -78,7 +79,7 @@ export const AppShell = memo(function AppShell() {
 
     // If CSRF was missing/stale, Spring returns 403. Retry once after forcing a fresh CSRF cookie.
     if (res && res.status === 403) {
-      await fetch('/api/me', { credentials: 'include', cache: 'no-store' }).catch(() => null)
+      await fetch(`${BASE_URL}/api/me`, { credentials: 'include', cache: 'no-store' }).catch(() => null)
       csrf = await ensureCsrfCookie()
       res = await postLogout(csrf)
     }

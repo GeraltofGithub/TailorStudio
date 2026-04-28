@@ -127,7 +127,6 @@ export default memo(function OrderPage() {
   const [orderMissing, setOrderMissing] = useState(false)
 
   const [customers, setCustomers] = useState<any[]>([])
-  const [customerPhoneMap, setCustomerPhoneMap] = useState<Record<string, string>>({})
 
   const [customerId, setCustomerId] = useState<string>('')
   const [garmentType, setGarmentType] = useState<Garment>('SHIRT')
@@ -152,12 +151,6 @@ export default memo(function OrderPage() {
   const [measureDraft, setMeasureDraft] = useState<MeasurementPayload>({ unit: 'INCH', values: {} })
   const [measureEditorOpen, setMeasureEditorOpen] = useState(false)
   const [pendingProfileSave, setPendingProfileSave] = useState(false)
-
-  const [waPhone, setWaPhone] = useState('')
-  const [waDate, setWaDate] = useState('')
-  const [waIncPay, setWaIncPay] = useState(true)
-  const [waIncDate, setWaIncDate] = useState(true)
-  const [waPreview, setWaPreview] = useState<string>('')
 
   const [paymentInfo, setPaymentInfo] = useState<any>({ phonePeConfigured: false })
   const [payModalOpen, setPayModalOpen] = useState(false)
@@ -213,11 +206,6 @@ export default memo(function OrderPage() {
       const list = await appService.customers.listActive()
       if (!alive) return
       setCustomers(list || [])
-      const map: Record<string, string> = {}
-      ;(list || []).forEach((c: any) => {
-        map[String(c.id)] = c.phone || ''
-      })
-      setCustomerPhoneMap(map)
     })()
     return () => {
       alive = false
@@ -268,10 +256,6 @@ export default memo(function OrderPage() {
       const ea = Number(extraLine.amount) || 0
       setExtraAmt(ea > 0 ? String(ea) : '')
     }
-
-    const cust = existing.customer || null
-    setWaPhone(cust?.phone || '')
-    setWaDate(isoDate(existing.deliveryDate))
   }, [existingOrder])
 
   const rankOfStatus = useCallback((s: Status) => {
@@ -457,18 +441,6 @@ export default memo(function OrderPage() {
     toast.success(`${garmentType} measurements added to order`)
   }, [customerId, garmentType, measureDraft, templates, toast])
 
-  const waMessageText = useCallback(() => {
-    const custOpt = customers.find((c) => String(c.id) === String(customerId))
-    const custLabel = custOpt ? `${custOpt.name} — ${custOpt.phone}` : ''
-    const delivery = waDate || deliveryDate
-    const parts: string[] = [`Hello ${custLabel ? custLabel.split(' — ')[0] : 'Customer'},`]
-    parts.push(`Your order for ${garmentType} is in process.`)
-    if (waIncPay) parts.push(`Payment update: Total Rs ${totals.sum.toFixed(2)}, Paid Rs ${totals.adv.toFixed(2)}, Balance Rs ${totals.bal.toFixed(2)}.`)
-    if (waIncDate && delivery) parts.push(`Expected delivery date: ${delivery}.`)
-    parts.push(`Thank you, ${studio.name || 'Tailor Studio'}`)
-    return parts.join('\n')
-  }, [customers, customerId, deliveryDate, garmentType, studio.name, totals, waDate, waIncDate, waIncPay])
-
   const billDescTouchedRef = useRef(false)
   useEffect(() => {
     // keep default bill description aligned to selected garment, unless user edited it
@@ -650,7 +622,6 @@ export default memo(function OrderPage() {
                     disabled={isCompleted}
                     onChange={(e) => {
                       setCustomerId(e.target.value)
-                      setWaPhone(customerPhoneMap[String(e.target.value)] || '')
                     }}
                   >
                     <option value="">Choose customer…</option>
@@ -700,7 +671,6 @@ export default memo(function OrderPage() {
                     disabled={isCompleted}
                     onChange={(e) => {
                       setDeliveryDate(e.target.value)
-                      setWaDate(e.target.value)
                     }}
                   />
                 </div>
@@ -1012,77 +982,6 @@ export default memo(function OrderPage() {
                 >
                   {snapPreview}
                 </pre>
-              </div>
-
-              <div className="panel" style={{ marginTop: '1rem' }}>
-                <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>WhatsApp customer notification (demo)</h2>
-                </div>
-                <div style={{ padding: '1rem 1.25rem' }} className="wa-demo-box">
-                  <p style={{ margin: '0 0 0.5rem', color: 'var(--muted)', fontSize: '0.86rem' }}>
-                    Demo-only UI: prepares a message with payment and delivery date details.
-                  </p>
-                  <div className="form-grid two">
-                    <div>
-                      <label>Notify customer phone</label>
-                      <input
-                        id="wa-phone"
-                        type="text"
-                        placeholder="Customer phone"
-                        value={waPhone}
-                        disabled={isCompleted}
-                        onChange={(e) => setWaPhone(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label>Expected delivery date</label>
-                      <input id="wa-date" type="date" value={waDate} disabled={isCompleted} onChange={(e) => setWaDate(e.target.value)} />
-                    </div>
-                  </div>
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                    <label style={{ margin: 0, textTransform: 'none', letterSpacing: 'normal', fontSize: '0.88rem' }}>
-                      <input id="wa-inc-pay" type="checkbox" checked={waIncPay} disabled={isCompleted} onChange={(e) => setWaIncPay(e.target.checked)} /> Include payment summary
-                    </label>
-                    <label style={{ margin: 0, textTransform: 'none', letterSpacing: 'normal', fontSize: '0.88rem' }}>
-                      <input id="wa-inc-date" type="checkbox" checked={waIncDate} disabled={isCompleted} onChange={(e) => setWaIncDate(e.target.checked)} /> Include expected delivery date
-                    </label>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-teal btn-sm"
-                    id="wa-preview-btn"
-                    style={{ marginTop: '0.75rem' }}
-                    disabled={isCompleted}
-                    onClick={() => {
-                      const msg = waMessageText()
-                      setWaPreview(msg)
-                    }}
-                  >
-                    Generate demo message
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    id="wa-send-btn"
-                    style={{ marginTop: '0.75rem' }}
-                    disabled={isCompleted}
-                    onClick={() => {
-                      const p = (waPhone || '').trim()
-                      if (!p) {
-                        toast.error('Enter customer phone to preview WhatsApp message.')
-                        return
-                      }
-                      const msg = waMessageText()
-                      setWaPreview(msg)
-                      toast.success('WhatsApp demo message generated')
-                    }}
-                  >
-                    Simulate WhatsApp send
-                  </button>
-                  <div id="wa-preview" className="wa-preview" style={{ display: waPreview ? 'block' : 'none' }}>
-                    {waPreview}
-                  </div>
-                </div>
               </div>
 
               <button
