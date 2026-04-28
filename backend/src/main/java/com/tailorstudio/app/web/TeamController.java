@@ -24,7 +24,7 @@ public class TeamController {
     @GetMapping
     public List<Map<String, Object>> list() {
         var u = currentUserService.requireUser();
-        return userRepository.findByBusiness_IdOrderByCreatedAtAsc(u.getBusinessId()).stream()
+        return userRepository.findByBusinessIdOrderByCreatedAtAsc(u.getBusinessId()).stream()
                 .map(user -> {
                     String role = user.getRole().name();
                     return Map.<String, Object>of(

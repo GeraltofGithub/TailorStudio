@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { Pagination } from '../../components/Pagination'
 
 type OrderRow = {
   id: number
@@ -27,6 +28,8 @@ function statusBadgeClass(st: string) {
 
 export default memo(function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([])
+  const [page, setPage] = useState(1)
+  const pageSize = 15
 
   useEffect(() => {
     let alive = true
@@ -41,6 +44,10 @@ export default memo(function OrdersPage() {
   }, [])
 
   const rows = useMemo(() => orders, [orders])
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * pageSize
+    return rows.slice(start, start + pageSize)
+  }, [page, pageSize, rows])
 
   return (
     <div className="panel">
@@ -71,7 +78,7 @@ export default memo(function OrdersPage() {
                 <td colSpan={9}>No orders yet.</td>
               </tr>
             ) : (
-              rows.map((o) => {
+              pagedRows.map((o) => {
                 const bal = Number(o.totalAmount) - Number(o.advanceAmount || 0)
                 return (
                   <tr key={o.id}>
@@ -100,6 +107,7 @@ export default memo(function OrdersPage() {
           </tbody>
         </table>
       </div>
+      <Pagination page={page} pageSize={pageSize} total={rows.length} onPageChange={setPage} />
     </div>
   )
 })

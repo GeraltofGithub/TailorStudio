@@ -36,6 +36,12 @@ public class CustomerController {
         return customerService.list(u.getBusinessId(), q);
     }
 
+    @GetMapping("/active")
+    public List<Customer> listActive(@RequestParam(required = false) String q) {
+        var u = currentUserService.requireUser();
+        return customerService.listActive(u.getBusinessId(), q);
+    }
+
     @GetMapping("/{id}")
     public Customer get(@PathVariable Long id) {
         var u = currentUserService.requireUser();
@@ -66,6 +72,30 @@ public class CustomerController {
         var u = currentUserService.requireUser();
         return customerService.update(
                 u.getBusinessId(), id, req.name(), req.phone(), req.address(), parseUnit(req.preferredUnit()));
+    }
+
+    @PostMapping("/{id}/disable")
+    public Customer disable(@PathVariable Long id) {
+        var u = currentUserService.requireUser();
+        return customerService.setActive(u.getBusinessId(), id, false);
+    }
+
+    @PutMapping("/{id}/disable")
+    public Customer disablePut(@PathVariable Long id) {
+        var u = currentUserService.requireUser();
+        return customerService.setActive(u.getBusinessId(), id, false);
+    }
+
+    @PostMapping("/{id}/enable")
+    public Customer enable(@PathVariable Long id) {
+        var u = currentUserService.requireUser();
+        return customerService.setActive(u.getBusinessId(), id, true);
+    }
+
+    @PutMapping("/{id}/enable")
+    public Customer enablePut(@PathVariable Long id) {
+        var u = currentUserService.requireUser();
+        return customerService.setActive(u.getBusinessId(), id, true);
     }
 
     private static MeasurementUnit parseUnit(String raw) {

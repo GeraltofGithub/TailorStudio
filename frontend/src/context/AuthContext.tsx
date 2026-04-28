@@ -46,6 +46,16 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     void refreshMe()
   }, [refreshMe])
 
+  // If any API call returns 401, our API client dispatches 'auth:logout'.
+  // Listen once and immediately clear local auth so AppShell redirects to /login.
+  useEffect(() => {
+    const onLogout = () => {
+      setState({ status: 'anon', me: null })
+    }
+    window.addEventListener('auth:logout', onLogout as EventListener)
+    return () => window.removeEventListener('auth:logout', onLogout as EventListener)
+  }, [])
+
   const value = useMemo<AuthContextValue>(() => ({ state, refreshMe, clearAuth }), [state, refreshMe, clearAuth])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

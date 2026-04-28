@@ -1,28 +1,24 @@
 package com.tailorstudio.app.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.bson.types.ObjectId;
 
 import java.time.Instant;
 
-@Entity
-@Table(name = "businesses")
+@Document(collection = "businesses")
 public class Business {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    private String mongoObjectId = new ObjectId().toHexString();
+
     private String name;
 
     private String tagline;
 
-    @Column(length = 500)
     private String address;
 
     private String phone;
@@ -32,10 +28,9 @@ public class Business {
     /**
      * Secret code for staff to join this studio (rotatable by owner).
      */
-    @Column(unique = true, length = 64)
+    @Indexed(unique = true)
     private String joinCode;
 
-    @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
     public Long getId() {
@@ -44,6 +39,14 @@ public class Business {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getMongoObjectId() {
+        return mongoObjectId;
+    }
+
+    public void setMongoObjectId(String mongoObjectId) {
+        this.mongoObjectId = mongoObjectId;
     }
 
     public String getName() {
