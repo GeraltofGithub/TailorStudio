@@ -42,14 +42,18 @@ export default memo(function LoginPage() {
               body.set('username', username)
               body.set('password', password)
               // CSRF is ignored for POST /login in backend config.
-              const r = await fetch(url, {
+              await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
-                redirect: 'manual',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body,
               })
-              if (r.status >= 200 && r.status < 400) {
+
+              // Spring Security responds with redirects on success/failure.
+              // The most robust check (dev + prod) is to ask /api/me after the POST.
+              const meUrl = import.meta.env.DEV ? `/api/me` : `/api/_proxy/api/me`
+              const me = await fetch(meUrl, { method: 'GET', credentials: 'include', cache: 'no-store' })
+              if (me.ok) {
                 try {
                   sessionStorage.setItem('ts_login_success', '1')
                 } catch {
