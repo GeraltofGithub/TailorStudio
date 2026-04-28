@@ -43,6 +43,9 @@ export default memo(function LoginPage() {
               await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
+                // Backend responds with a 302 redirect to legacy *.html pages.
+                // Never follow redirects in SPA; we verify login by calling /api/me.
+                redirect: 'manual',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body,
               })
