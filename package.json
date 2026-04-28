@@ -1,0 +1,12 @@
+{
+  "name": "tailor-studio-monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "install:frontend": "npm --workspace frontend install",
+    "build": "npm --workspace frontend run build"
+  }
+}
+
