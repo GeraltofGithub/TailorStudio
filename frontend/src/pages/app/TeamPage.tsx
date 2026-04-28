@@ -8,6 +8,7 @@ export default memo(function TeamPage() {
   const [team, setTeam] = useState<any[]>([])
   const [msg, setMsg] = useState('')
   const [joinCode, setJoinCode] = useState<string>('')
+  const [rotating, setRotating] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -30,6 +31,8 @@ export default memo(function TeamPage() {
   const isOwner = state.status === 'authed' && (state.me as any).role === 'OWNER'
 
   const rotate = useCallback(async () => {
+    if (rotating) return
+    setRotating(true)
     setMsg('')
     try {
       const data = await appService.team.rotateJoinCode()
@@ -37,8 +40,10 @@ export default memo(function TeamPage() {
       setMsg('New code generated. Share it with new staff only.')
     } catch {
       setMsg('Could not rotate.')
+    } finally {
+      setRotating(false)
     }
-  }, [])
+  }, [rotating])
 
   const rows = useMemo(() => team || [], [team])
 
@@ -57,8 +62,8 @@ export default memo(function TeamPage() {
               {joinCode || '—'}
             </div>
             <div style={{ marginTop: '1rem' }}>
-              <button type="button" className="btn btn-teal" id="rot" onClick={() => void rotate()}>
-                Generate new code
+              <button type="button" className="btn btn-teal" id="rot" disabled={rotating} onClick={() => void rotate()}>
+                {rotating ? 'Generating…' : 'Generate new code'}
               </button>
             </div>
             <p id="rot-msg" style={{ marginTop: '0.75rem', fontSize: '0.88rem', color: 'var(--muted)' }}>

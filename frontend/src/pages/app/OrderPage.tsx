@@ -165,6 +165,11 @@ export default memo(function OrderPage() {
   const [payCashAmt, setPayCashAmt] = useState<string>('')
   const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [pullingMeasurements, setPullingMeasurements] = useState(false)
+  const [syncingPhonePe, setSyncingPhonePe] = useState(false)
+  const [recordingCash, setRecordingCash] = useState(false)
+  const [initiatingOnlinePay, setInitiatingOnlinePay] = useState(false)
+  const [markingPaid, setMarkingPaid] = useState(false)
 
   const receiptPayRef = useRef<HTMLDivElement | null>(null)
   const orderSlipRef = useRef<HTMLDivElement | null>(null)
@@ -410,6 +415,8 @@ export default memo(function OrderPage() {
       toast.error('Select a customer first.')
       return
     }
+    if (pullingMeasurements) return
+    setPullingMeasurements(true)
     try {
       const m = await appService.customers.getMeasurement(Number(customerId), garmentType)
       const payload = parsePayloadJson(String(m?.dataJson || '{}'))
@@ -427,8 +434,10 @@ export default memo(function OrderPage() {
     } catch (e: any) {
       const msg = e?.payload?.message || e?.payload?.error || e?.message
       toast.error(msg ? String(msg) : 'Could not copy measurements. Please try again.')
+    } finally {
+      setPullingMeasurements(false)
     }
-  }, [customerId, garmentType, toast])
+  }, [customerId, garmentType, pullingMeasurements, toast])
 
   const saveMeasurementsToProfile = useCallback(async () => {
     if (!customerId) {
@@ -888,8 +897,11 @@ export default memo(function OrderPage() {
                             className="btn btn-ghost btn-sm"
                             id="btn-sync-phonepe"
                             style={{ display: showSync ? 'inline-block' : 'none' }}
+                            disabled={syncingPhonePe}
                             onClick={async () => {
                               if (!oid) return
+                              if (syncingPhonePe) return
+                              setSyncingPhonePe(true)
                               try {
                                 const data = await appService.orders.phonePeSync(oid)
                                 setExistingOrder(data)
@@ -899,10 +911,12 @@ export default memo(function OrderPage() {
                               } catch (e: any) {
                                 const msg = e?.payload?.error || e?.payload?.message || e?.message
                                 toast.error(msg ? String(msg) : 'Could not sync online payment. Please try again.')
+                              } finally {
+                                setSyncingPhonePe(false)
                               }
                             }}
                           >
-                            Sync online payment
+                            {syncingPhonePe ? 'Syncing…' : 'Sync online payment'}
                           </button>
                         </div>
                         <p id="paid-full-note" style={{ display: canPayActions ? 'none' : 'block', margin: '0.5rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
@@ -967,8 +981,14 @@ export default memo(function OrderPage() {
                   <h2 style={{ fontSize: '1rem' }}>
                     Measurements on this order<span className="req-star">*</span>
                   </h2>
-                  <button type="button" className="btn btn-teal btn-sm" id="pullM" disabled={isCompleted} onClick={() => void pullMeasurements()}>
-                    Copy from customer profile
+                  <button
+                    type="button"
+                    className="btn btn-teal btn-sm"
+                    id="pullM"
+                    disabled={isCompleted || pullingMeasurements}
+                    onClick={() => void pullMeasurements()}
+                  >
+                    {pullingMeasurements ? 'Copying…' : 'Copy from customer profile'}
                   </button>
                 </div>
                 <div style={{ padding: '1rem 1.25rem', color: 'var(--muted)', fontSize: '0.88rem' }}>
@@ -1138,13 +1158,16 @@ export default memo(function OrderPage() {
                     type="button"
                     className="btn btn-primary"
                     id="pay-cash-submit"
+                    disabled={recordingCash}
                     onClick={async () => {
                       if (!oid) return
+                      if (recordingCash) return
                       const amt = parseFloat(payCashAmt)
                       if (!amt || amt <= 0) {
                         toast.error('Enter the cash amount received.')
                         return
                       }
+                      setRecordingCash(true)
                       try {
                         const data = await appService.orders.payCash(oid, amt)
                         setExistingOrder(data)
@@ -1155,10 +1178,12 @@ export default memo(function OrderPage() {
                       } catch (e: any) {
                         const msg = e?.payload?.error || e?.payload?.message || e?.message
                         toast.error(msg ? String(msg) : 'Could not record cash payment. Please try again.')
+                      } finally {
+                        setRecordingCash(false)
                       }
                     }}
                   >
-                    Record cash
+                    {recordingCash ? 'Recording…' : 'Record cash'}
                   </button>
                   <button type="button" className="btn btn-ghost" id="pay-cash-back" onClick={() => setPayStep('choice')}>
                     Back
@@ -1181,9 +1206,11 @@ export default memo(function OrderPage() {
                     type="button"
                     className="btn btn-primary"
                     id="pay-online-go"
-                    disabled={!paymentInfo?.phonePeConfigured}
+                    disabled={!paymentInfo?.phonePeConfigured || initiatingOnlinePay}
                     onClick={async () => {
                       if (!oid || !paymentInfo?.phonePeConfigured) return
+                      if (initiatingOnlinePay) return
+                      setInitiatingOnlinePay(true)
                       try {
                         const data = await appService.orders.phonePeInitiate(oid)
                         if ((data as any).redirectUrl) window.location.href = (data as any).redirectUrl
@@ -1191,10 +1218,12 @@ export default memo(function OrderPage() {
                       } catch (e: any) {
                         const msg = e?.payload?.error || e?.payload?.message || e?.message
                         toast.error(msg ? String(msg) : 'Could not start PhonePe checkout. Please try again.')
+                      } finally {
+                        setInitiatingOnlinePay(false)
                       }
                     }}
                   >
-                    Pay now
+                    {initiatingOnlinePay ? 'Opening…' : 'Pay now'}
                   </button>
                   <button type="button" className="btn btn-ghost" id="pay-online-back" onClick={() => setPayStep('choice')}>
                     Back
@@ -1243,8 +1272,11 @@ export default memo(function OrderPage() {
               <button
                 type="button"
                 className="btn btn-primary"
+                disabled={markingPaid}
                 onClick={async () => {
                   if (!oid) return
+                  if (markingPaid) return
+                  setMarkingPaid(true)
                   try {
                     const data = await appService.orders.markPaid(oid)
                     setExistingOrder(data)
@@ -1255,10 +1287,12 @@ export default memo(function OrderPage() {
                   } catch (e: any) {
                     const msg = e?.payload?.error || e?.payload?.message || e?.message
                     toast.error(msg ? String(msg) : 'Failed to mark order as paid. Please try again.')
+                  } finally {
+                    setMarkingPaid(false)
                   }
                 }}
               >
-                Confirm
+                {markingPaid ? 'Saving…' : 'Confirm'}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => setMarkPaidConfirmOpen(false)}>
                 Cancel
@@ -1357,8 +1391,8 @@ export default memo(function OrderPage() {
               ))}
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-                <button type="button" className="btn btn-primary" onClick={() => void saveMeasurementsToProfile()}>
-                  Save {garmentType} to customer
+                <button type="button" className="btn btn-primary" disabled={pendingProfileSave} onClick={() => void saveMeasurementsToProfile()}>
+                  {pendingProfileSave ? 'Saving…' : `Save ${garmentType} to customer`}
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={() => setMeasureEditorOpen(false)}>
                   Cancel
