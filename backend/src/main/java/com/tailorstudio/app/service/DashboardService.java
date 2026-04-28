@@ -26,7 +26,7 @@ public class DashboardService {
         Instant start = today.atStartOfDay(zone).toInstant();
         Instant end = today.plusDays(1).atStartOfDay(zone).toInstant();
 
-        long totalOrders = orderRepository.countByBusiness_Id(businessId);
+        long totalOrders = orderRepository.countByBusinessId(businessId);
         long pendingDeliveries = orderRepository.countActiveOrders(businessId, OrderStatus.DELIVERED);
         BigDecimal dailyIncome = orderRepository.sumDeliveredIncomeBetween(
                 businessId, OrderStatus.DELIVERED, start, end);

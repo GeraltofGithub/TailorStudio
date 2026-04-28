@@ -1,13 +1,13 @@
 package com.tailorstudio.app.repo;
 
 import com.tailorstudio.app.domain.AppNotification;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.List;
 
-public interface AppNotificationRepository extends JpaRepository<AppNotification, Long> {
+public interface AppNotificationRepository extends MongoRepository<AppNotification, Long> {
 
-    List<AppNotification> findByBusiness_IdOrderByCreatedAtDesc(Long businessId);
+    List<AppNotification> findByBusinessIdOrderByCreatedAtDesc(Long businessId);
 
-    long countByBusiness_IdAndReadFlagFalse(Long businessId);
+    long countByBusinessIdAndReadFlagFalse(Long businessId);
 }

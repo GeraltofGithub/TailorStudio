@@ -3,6 +3,7 @@ package com.tailorstudio.autoconfigure;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 
@@ -24,6 +25,7 @@ public class EarlyOrderPaymentSchemaFix {
     public static final class OrderPaymentSchemaMarker {}
 
     @Bean
+    @ConditionalOnBean(DataSource.class)
     public OrderPaymentSchemaMarker orderPaymentSchemaApplied(DataSource dataSource) {
         try (Connection c = dataSource.getConnection();
                 Statement st = c.createStatement()) {
