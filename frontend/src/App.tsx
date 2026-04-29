@@ -34,7 +34,7 @@ function App() {
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/join" element={<JoinPage />} />
 
-              {/* Backward compatible .html routes (Spring redirects here after form login) */}
+              {/* Backward compatible .html routes (old bookmarks / legacy links on the SPA host) */}
               <Route path="/login.html" element={<LegacyRedirect to="/login" />} />
               <Route path="/signup.html" element={<LegacyRedirect to="/signup" />} />
               <Route path="/join.html" element={<LegacyRedirect to="/join" />} />
