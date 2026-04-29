@@ -112,6 +112,8 @@ class Api {
         method: 'POST',
         credentials: 'include',
         cache: 'no-store',
+        // Avoid following Spring's legacy HTML redirects on the API host (often 404 for SPAs).
+        redirect: 'manual',
         headers: this._csrfHeaders(contentType),
         body: body.toString(),
       })

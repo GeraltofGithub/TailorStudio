@@ -20,6 +20,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -86,7 +87,10 @@ public class SecurityConfig {
                         .permitAll())
                 .logout(logout -> logout
                         .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "POST"))
-                        .logoutSuccessUrl("/index.html")
+                        // React SPA is hosted separately (Vercel). Do not redirect to legacy static pages on the API host.
+                        .logoutSuccessHandler((LogoutSuccessHandler) (request, response, authentication) -> {
+                            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                        })
                         .invalidateHttpSession(true)
                         .deleteCookies("JSESSIONID", "XSRF-TOKEN")
                         .permitAll())
