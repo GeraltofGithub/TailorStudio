@@ -97,6 +97,46 @@ class Api {
     return (await r.json()) as T
   }
 
+  /**
+   * Spring Security logout is a form POST that typically responds with a redirect/HTML (not JSON).
+   * Use the same CSRF priming + retry logic as JSON requests, but do not attempt JSON parsing.
+   */
+  async postFormLogout(url: string, body: URLSearchParams): Promise<Response> {
+    const contentType = 'application/x-www-form-urlencoded'
+    const isWrite = true
+
+    if (isWrite && !this._csrfPrimed) await this._ensureCsrfToken()
+
+    const doFetch = async () =>
+      fetch(this._joinUrl(url), {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: this._csrfHeaders(contentType),
+        body: body.toString(),
+      })
+
+    let r = await doFetch()
+
+    const nextToken = r.headers.get('x-xsrf-token') || r.headers.get('X-XSRF-TOKEN') || ''
+    if (nextToken) {
+      this._csrfToken = nextToken
+      this._csrfPrimed = true
+    }
+
+    if (isWrite && r.status === 403) {
+      this._csrfPrimed = false
+      await this._ensureCsrfToken()
+      r = await doFetch()
+    }
+
+    if (r.status === 401) {
+      window.dispatchEvent(new CustomEvent('auth:logout'))
+    }
+
+    return r
+  }
+
   _get<T = unknown>(url: string): Promise<T> {
     return this._request<T>('GET', url)
   }
