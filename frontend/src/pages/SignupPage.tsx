@@ -6,6 +6,15 @@ import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import tailorLogo from '../assets/tailor-logo.png'
 
+async function signupWithTimeout<T>(p: Promise<T>, timeoutMs = 25000): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error('timeout')), timeoutMs)
+    }),
+  ])
+}
+
 export default memo(function SignupPage() {
   const [pending, setPending] = useState(false)
   const nav = useNavigate()
@@ -30,11 +39,11 @@ export default memo(function SignupPage() {
     }
 
     try {
-      const data = await authService.signup(body)
+      const data = await signupWithTimeout(authService.signup(body))
       toast.success(data.message || 'Studio created')
       nav('/login', { replace: true })
     } catch (e: any) {
-      const msg = e?.payload?.error || e?.payload?.message || e?.message
+      const msg = e?.message === 'timeout' ? 'Create studio is taking too long. Please retry in a few seconds.' : e?.payload?.error || e?.payload?.message || e?.message
       toast.error(msg ? String(msg) : 'Could not create studio. Please try again.')
     }
 
@@ -58,7 +67,8 @@ export default memo(function SignupPage() {
         <div className="auth-card" style={{ maxWidth: 520 }}>
         <h1>Create your studio</h1>
         <p className="sub">You become the owner. You’ll get a join code to invite staff.</p>
-        <form id="f" onSubmit={onSubmit}>
+          <form id="f" onSubmit={onSubmit}>
+            <fieldset disabled={pending} style={{ border: 'none', margin: 0, padding: 0, display: 'grid', gap: '1rem' }}>
           <div className="form-grid two">
             <div>
               <label htmlFor="businessName">Studio name</label>
@@ -130,6 +140,7 @@ export default memo(function SignupPage() {
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={pending}>
             {pending ? 'Creating…' : 'Create studio'}
           </button>
+            </fieldset>
         </form>
         <p className="auth-footer">
           Already have an account? <Link to="/login">Sign in</Link>

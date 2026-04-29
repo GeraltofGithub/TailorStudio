@@ -7,6 +7,16 @@ import { BASE_URL } from '../utils/constants'
 import { useAuth } from '../context/AuthContext'
 import tailorLogo from '../assets/tailor-logo.png'
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs = 25000) {
+  const ctrl = new AbortController()
+  const t = window.setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: ctrl.signal })
+  } finally {
+    window.clearTimeout(t)
+  }
+}
+
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
   const showError = sp.get('error') === '1'
@@ -58,7 +68,7 @@ export default memo(function LoginPage() {
                 body.set('username', username)
                 body.set('password', password)
                 // CSRF is ignored for POST /login in backend config.
-                await fetch(url, {
+                await fetchWithTimeout(url, {
                   method: 'POST',
                   credentials: 'include',
                   // Backend may respond with redirects on failure; avoid following legacy HTML targets on the API host.
@@ -80,51 +90,57 @@ export default memo(function LoginPage() {
                 }
                 nav('/app/dashboard', { replace: true })
                 return
-              } catch {
-                toast.error('Server error during sign-in. Please retry.')
+              } catch (err: any) {
+                if (err?.name === 'AbortError') {
+                  toast.error('Sign in is taking too long. Please retry in a few seconds.')
+                } else {
+                  toast.error('Server error during sign-in. Please retry.')
+                }
               } finally {
                 setPending(false)
               }
             }}
           >
-            <div>
-              <label htmlFor="username">Email</label>
-              <input type="email" id="username" name="username" autoComplete="username" required />
-            </div>
-            <div>
-              <label htmlFor="password">Password</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  id="password"
-                  name="password"
-                  autoComplete="current-password"
-                  required
-                  style={{ paddingRight: '2.4rem' }}
-                />
-                <button
-                  type="button"
-                  className="ts-icon-btn"
-                  aria-label={showPass ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowPass((v) => !v)}
-                  style={{
-                    position: 'absolute',
-                    right: '0.35rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--muted)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+            <fieldset disabled={pending} style={{ border: 'none', margin: 0, padding: 0, display: 'grid', gap: '1rem' }}>
+              <div>
+                <label htmlFor="username">Email</label>
+                <input type="email" id="username" name="username" autoComplete="username" required />
               </div>
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }} disabled={pending}>
-              {pending ? 'Signing in…' : 'Sign in'}
-            </button>
+              <div>
+                <label htmlFor="password">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    id="password"
+                    name="password"
+                    autoComplete="current-password"
+                    required
+                    style={{ paddingRight: '2.4rem' }}
+                  />
+                  <button
+                    type="button"
+                    className="ts-icon-btn"
+                    aria-label={showPass ? 'Hide password' : 'Show password'}
+                    onClick={() => setShowPass((v) => !v)}
+                    style={{
+                      position: 'absolute',
+                      right: '0.35rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }} disabled={pending}>
+                {pending ? 'Signing in…' : 'Sign in'}
+              </button>
+            </fieldset>
           </form>
           <p className="auth-footer">
             New studio? <Link to="/signup">Create an account</Link> · Staff? <Link to="/join">Join with code</Link>

@@ -6,6 +6,15 @@ import tailorLogo from '../assets/tailor-logo.png'
 
 type Msg = { kind: 'success' | 'error'; text: string } | null
 
+async function joinWithTimeout<T>(p: Promise<T>, timeoutMs = 25000): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error('timeout')), timeoutMs)
+    }),
+  ])
+}
+
 export default memo(function JoinPage() {
   const [msg, setMsg] = useState<Msg>(null)
   const [pending, setPending] = useState(false)
@@ -26,11 +35,11 @@ export default memo(function JoinPage() {
     }
 
     try {
-      const data = await authService.staffSignup(body)
+      const data = await joinWithTimeout(authService.staffSignup(body))
       setMsg({ kind: 'success', text: data.message || 'Joined.' })
       window.setTimeout(() => nav('/login'), 900)
     } catch (e: any) {
-      setMsg({ kind: 'error', text: e?.payload?.error || e?.payload?.message || e?.message || 'Could not join' })
+      setMsg({ kind: 'error', text: e?.message === 'timeout' ? 'Join is taking too long. Please retry in a few seconds.' : e?.payload?.error || e?.payload?.message || e?.message || 'Could not join' })
     }
 
     setPending(false)
@@ -63,6 +72,7 @@ export default memo(function JoinPage() {
           <p className="sub">Ask the owner for the join code, then create your staff account.</p>
           <div id="msg">{msgNode}</div>
           <form id="f" onSubmit={onSubmit}>
+            <fieldset disabled={pending} style={{ border: 'none', margin: 0, padding: 0, display: 'grid', gap: '1rem' }}>
             <div>
               <label htmlFor="joinCode">Studio join code</label>
               <input
@@ -92,6 +102,7 @@ export default memo(function JoinPage() {
             <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={pending}>
               {pending ? 'Joining…' : 'Join studio'}
             </button>
+            </fieldset>
           </form>
           <p className="auth-footer">
             <Link to="/login">Sign in</Link> · <Link to="/signup">Create a new studio</Link>
