@@ -4,12 +4,14 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import { BASE_URL } from '../utils/constants'
+import { useAuth } from '../context/AuthContext'
 
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
   const showError = sp.get('error') === '1'
   const nav = useNavigate()
   const toast = useAppToast()
+  const { refreshMe } = useAuth()
   const [showPass, setShowPass] = useState(false)
   const [pending, setPending] = useState(false)
 
@@ -46,27 +48,25 @@ export default memo(function LoginPage() {
               await fetch(url, {
                 method: 'POST',
                 credentials: 'include',
-                // Backend responds with a 302 redirect to legacy *.html pages.
-                // Never follow redirects in SPA; we verify login by calling /api/me.
+                // Backend may respond with redirects on failure; avoid following legacy HTML targets on the API host.
                 redirect: 'manual',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body,
               })
 
-              // Spring Security responds with redirects on success/failure.
-              // The most robust check (dev + prod) is to ask /api/me after the POST.
-              const meUrl = `${BASE_URL || ''}/api/me`
-              const me = await fetch(meUrl, { method: 'GET', credentials: 'include', cache: 'no-store' })
-              if (me.ok) {
-                try {
-                  sessionStorage.setItem('ts_login_success', '1')
-                } catch {
-                  // ignore
-                }
-                nav('/app/dashboard', { replace: true })
+              // Refresh auth context from the API (same client as the rest of the app).
+              const ok = await refreshMe()
+              if (!ok) {
+                toast.error('Invalid credentials')
                 return
               }
-              toast.error('Invalid credentials')
+              try {
+                sessionStorage.setItem('ts_login_success', '1')
+              } catch {
+                // ignore
+              }
+              nav('/app/dashboard', { replace: true })
+              return
             } catch {
               toast.error('Server error during sign-in. Please retry.')
             } finally {

@@ -81,8 +81,8 @@ public class SecurityConfig {
                         .loginProcessingUrl("/login")
                         .usernameParameter("username")
                         .passwordParameter("password")
-                        .successHandler((request, response, authentication) -> response.sendRedirect(
-                                request.getContextPath() + "/app/dashboard.html"))
+                        // React SPA is hosted separately (Vercel). Do not redirect to legacy *.html on the API host.
+                        .successHandler((request, response, authentication) -> response.setStatus(HttpServletResponse.SC_NO_CONTENT))
                         .failureUrl("/login.html?error=1")
                         .permitAll())
                 .logout(logout -> logout

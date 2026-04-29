@@ -11,7 +11,7 @@ type AuthState =
 
 type AuthContextValue = {
   state: AuthState
-  refreshMe: () => Promise<void>
+  refreshMe: () => Promise<boolean>
   clearAuth: () => void
 }
 
@@ -35,10 +35,10 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     try {
       const me = await authService.me()
       setState({ status: 'authed', me })
-      return
+      return true
     } catch {
       setState({ status: 'anon', me: null })
-      return
+      return false
     }
   }, [])
 
