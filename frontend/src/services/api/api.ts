@@ -49,7 +49,7 @@ class Api {
       fetch(this._joinUrl(url), {
         method,
         credentials: 'include',
-        cache: 'no-store',
+        cache: method === 'GET' ? 'default' : 'no-store',
         headers: this._csrfHeaders(contentType),
         body: hasBody ? JSON.stringify(body) : undefined,
       })

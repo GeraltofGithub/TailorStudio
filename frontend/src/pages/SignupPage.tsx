@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { authService } from '../services/authService'
 import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
+import tailorLogo from '../assets/tailor-logo.png'
 
 export default memo(function SignupPage() {
   const [pending, setPending] = useState(false)
@@ -31,7 +32,7 @@ export default memo(function SignupPage() {
     try {
       const data = await authService.signup(body)
       toast.success(data.message || 'Studio created')
-      window.setTimeout(() => nav('/login'), 900)
+      nav('/login', { replace: true })
     } catch (e: any) {
       const msg = e?.payload?.error || e?.payload?.message || e?.message
       toast.error(msg ? String(msg) : 'Could not create studio. Please try again.')
@@ -41,8 +42,20 @@ export default memo(function SignupPage() {
   }, [nav, pending, toast])
 
   return (
-    <div className="auth-page">
-      <div className="auth-card" style={{ maxWidth: 520 }}>
+    <div className="auth-with-header">
+      <header className="landing-header">
+        <Link to="/" className="logo-mark">
+          <img src={tailorLogo} alt="Tailor Studio logo" className="brand-logo" />
+          Tailor Studio
+        </Link>
+        <nav className="landing-nav">
+          <Link className="btn btn-ghost" to="/login">
+            Sign in
+          </Link>
+        </nav>
+      </header>
+      <div className="auth-page">
+        <div className="auth-card" style={{ maxWidth: 520 }}>
         <h1>Create your studio</h1>
         <p className="sub">You become the owner. You’ll get a join code to invite staff.</p>
         <form id="f" onSubmit={onSubmit}>
@@ -121,6 +134,7 @@ export default memo(function SignupPage() {
         <p className="auth-footer">
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
+        </div>
       </div>
     </div>
   )

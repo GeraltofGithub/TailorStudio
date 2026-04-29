@@ -1,21 +1,13 @@
 import { memo } from 'react'
 import { Link } from 'react-router-dom'
+import tailorLogo from '../assets/tailor-logo.png'
 
 export default memo(function LandingPage() {
   return (
     <div className="landing">
       <header className="landing-header">
         <div className="logo-mark">
-          <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect x="2" y="2" width="36" height="36" rx="8" stroke="url(#lg)" strokeWidth="2" />
-            <path d="M12 28L20 10L28 28" stroke="#c9a227" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            <defs>
-              <linearGradient id="lg" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#2dd4bf" />
-                <stop offset="1" stopColor="#c9a227" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <img src={tailorLogo} alt="Tailor Studio logo" className="brand-logo" />
           Tailor Studio
         </div>
         <nav className="landing-nav">

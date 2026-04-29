@@ -658,6 +658,7 @@ export default memo(function OrderPage() {
                     required
                     value={orderDate}
                     disabled={isCompleted}
+                    onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={(e) => setOrderDate(e.target.value)}
                   />
                 </div>
@@ -669,6 +670,7 @@ export default memo(function OrderPage() {
                     required
                     value={deliveryDate}
                     disabled={isCompleted}
+                    onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={(e) => {
                       setDeliveryDate(e.target.value)
                     }}
@@ -1290,8 +1292,8 @@ export default memo(function OrderPage() {
               ))}
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-                <button type="button" className="btn btn-primary" disabled={pendingProfileSave} onClick={() => void saveMeasurementsToProfile()}>
-                  {pendingProfileSave ? 'Saving…' : `Save ${garmentType} to customer`}
+                <button type="button" className="btn btn-primary" onClick={() => void saveMeasurementsToProfile()}>
+                  {`Save ${garmentType} to customer`}
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={() => setMeasureEditorOpen(false)}>
                   Cancel

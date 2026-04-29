@@ -5,6 +5,7 @@ import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import { BASE_URL } from '../utils/constants'
 import { useAuth } from '../context/AuthContext'
+import tailorLogo from '../assets/tailor-logo.png'
 
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
@@ -23,99 +24,112 @@ export default memo(function LoginPage() {
   }, [nav, showError, toast])
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>Welcome back</h1>
-        <p className="sub">Sign in to your tailor workspace.</p>
-        <div id="login-err" className="alert alert-error" style={{ display: showError ? 'block' : 'none' }}>
-          Sign-in failed. Check your email and password, then try again.
-        </div>
-        <form
-          id="login-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (pending) return
-            setPending(true)
-            const fd = new FormData(e.currentTarget)
-            const username = String(fd.get('username') || '')
-            const password = String(fd.get('password') || '')
-            const url = `${BASE_URL || ''}/login`
-            try {
-              const body = new URLSearchParams()
-              body.set('username', username)
-              body.set('password', password)
-              // CSRF is ignored for POST /login in backend config.
-              await fetch(url, {
-                method: 'POST',
-                credentials: 'include',
-                // Backend may respond with redirects on failure; avoid following legacy HTML targets on the API host.
-                redirect: 'manual',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body,
-              })
-
-              // Refresh auth context from the API (same client as the rest of the app).
-              const ok = await refreshMe()
-              if (!ok) {
-                toast.error('Invalid credentials')
-                return
-              }
+    <div className="auth-with-header">
+      <header className="landing-header">
+        <Link to="/" className="logo-mark">
+          <img src={tailorLogo} alt="Tailor Studio logo" className="brand-logo" />
+          Tailor Studio
+        </Link>
+        <nav className="landing-nav">
+          <Link className="btn btn-primary" to="/signup">
+            Create studio
+          </Link>
+        </nav>
+      </header>
+      <div className="auth-page">
+        <div className="auth-card">
+          <h1>Welcome back</h1>
+          <p className="sub">Sign in to your tailor workspace.</p>
+          <div id="login-err" className="alert alert-error" style={{ display: showError ? 'block' : 'none' }}>
+            Sign-in failed. Check your email and password, then try again.
+          </div>
+          <form
+            id="login-form"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              if (pending) return
+              setPending(true)
+              const fd = new FormData(e.currentTarget)
+              const username = String(fd.get('username') || '')
+              const password = String(fd.get('password') || '')
+              const url = `${BASE_URL || ''}/login`
               try {
-                sessionStorage.setItem('ts_login_success', '1')
+                const body = new URLSearchParams()
+                body.set('username', username)
+                body.set('password', password)
+                // CSRF is ignored for POST /login in backend config.
+                await fetch(url, {
+                  method: 'POST',
+                  credentials: 'include',
+                  // Backend may respond with redirects on failure; avoid following legacy HTML targets on the API host.
+                  redirect: 'manual',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body,
+                })
+
+                // Refresh auth context from the API (same client as the rest of the app).
+                const ok = await refreshMe({ silent: true })
+                if (!ok) {
+                  toast.error('Invalid credentials')
+                  return
+                }
+                try {
+                  sessionStorage.setItem('ts_login_success', '1')
+                } catch {
+                  // ignore
+                }
+                nav('/app/dashboard', { replace: true })
+                return
               } catch {
-                // ignore
+                toast.error('Server error during sign-in. Please retry.')
+              } finally {
+                setPending(false)
               }
-              nav('/app/dashboard', { replace: true })
-              return
-            } catch {
-              toast.error('Server error during sign-in. Please retry.')
-            } finally {
-              setPending(false)
-            }
-          }}
-        >
-          <div>
-            <label htmlFor="username">Email</label>
-            <input type="email" id="username" name="username" autoComplete="username" required />
-          </div>
-          <div>
-            <label htmlFor="password">Password</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                type={showPass ? 'text' : 'password'}
-                id="password"
-                name="password"
-                autoComplete="current-password"
-                required
-                style={{ paddingRight: '2.4rem' }}
-              />
-              <button
-                type="button"
-                className="ts-icon-btn"
-                aria-label={showPass ? 'Hide password' : 'Show password'}
-                onClick={() => setShowPass((v) => !v)}
-                style={{
-                  position: 'absolute',
-                  right: '0.35rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--muted)',
-                  cursor: 'pointer',
-                }}
-              >
-                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+            }}
+          >
+            <div>
+              <label htmlFor="username">Email</label>
+              <input type="email" id="username" name="username" autoComplete="username" required />
             </div>
-          </div>
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }} disabled={pending}>
-            {pending ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-        <p className="auth-footer">
-          New studio? <Link to="/signup">Create an account</Link> · Staff? <Link to="/join">Join with code</Link>
-        </p>
+            <div>
+              <label htmlFor="password">Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  style={{ paddingRight: '2.4rem' }}
+                />
+                <button
+                  type="button"
+                  className="ts-icon-btn"
+                  aria-label={showPass ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowPass((v) => !v)}
+                  style={{
+                    position: 'absolute',
+                    right: '0.35rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    border: 'none',
+                    background: 'transparent',
+                    color: 'var(--muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.25rem' }} disabled={pending}>
+              {pending ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+          <p className="auth-footer">
+            New studio? <Link to="/signup">Create an account</Link> · Staff? <Link to="/join">Join with code</Link>
+          </p>
+        </div>
       </div>
     </div>
   )

@@ -208,14 +208,10 @@ export default memo(function PaymentsPage() {
         </div>
       </div>
 
-      <div ref={rpRef} id="receipt-payment" className="receipt-sheet" style={{ display: selId ? 'block' : 'none' }} aria-label="Payment receipt" />
-      <div
-        ref={roRef}
-        id="receipt-order"
-        className="receipt-sheet"
-        style={{ display: selId ? 'block' : 'none', marginTop: '1.5rem' }}
-        aria-label="Work order"
-      />
+      <div className="receipt-previews" style={{ display: selId ? 'grid' : 'none' }}>
+        <div ref={rpRef} id="receipt-payment" className="receipt-sheet" aria-label="Payment receipt" />
+        <div ref={roRef} id="receipt-order" className="receipt-sheet" aria-label="Work order" />
+      </div>
     </>
   )
 })
