@@ -63,27 +63,24 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/",
-                                "/index.html",
-                                "/login.html",
-                                "/signup.html",
-                                "/join.html",
-                                "/css/**",
-                                "/js/**",
-                                "/assets/**",
+                                "/login",
                                 "/api/auth/**",
                                 "/h2-console/**").permitAll()
                         .requestMatchers("/app/**").authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 .formLogin(form -> form
-                        .loginPage("/login.html")
+                        .loginPage("/login")
                         .loginProcessingUrl("/login")
                         .usernameParameter("username")
                         .passwordParameter("password")
                         // React SPA is hosted separately (Vercel). Do not redirect to legacy *.html on the API host.
                         .successHandler((request, response, authentication) -> response.setStatus(HttpServletResponse.SC_NO_CONTENT))
-                        .failureUrl("/login.html?error=1")
+                        .failureHandler((request, response, exception) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.getWriter().write("{\"error\":\"unauthorized\"}");
+                        })
                         .permitAll())
                 .logout(logout -> logout
                         .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "POST"))
@@ -101,7 +98,9 @@ public class SecurityConfig {
                                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                                 response.getWriter().write("{\"error\":\"unauthorized\"}");
                             } else {
-                                response.sendRedirect("/login.html");
+                                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                                response.getWriter().write("{\"error\":\"unauthorized\"}");
                             }
                         })
                         // AnonymousAuthenticationToken still has isAuthenticated()==true, so access denied
@@ -114,7 +113,9 @@ public class SecurityConfig {
                                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                                     response.getWriter().write("{\"error\":\"unauthorized\"}");
                                 } else {
-                                    response.sendRedirect("/login.html");
+                                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                                    response.getWriter().write("{\"error\":\"unauthorized\"}");
                                 }
                                 return;
                             }
