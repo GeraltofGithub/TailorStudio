@@ -7,6 +7,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.Environment;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -36,11 +37,20 @@ public class MailStartupDiagnostics {
         String host = environment.getProperty("MAIL_HOST", environment.getProperty("spring.mail.host", ""));
         String port = environment.getProperty("MAIL_PORT", environment.getProperty("spring.mail.port", ""));
         boolean ssl = Boolean.parseBoolean(environment.getProperty("MAIL_SMTP_SSL", "false"));
+        int effectivePort = -1;
+        String effectiveHost = host;
+        if (mailSender.getIfAvailable() instanceof JavaMailSenderImpl impl) {
+            effectivePort = impl.getPort();
+            if (impl.getHost() != null) {
+                effectiveHost = impl.getHost();
+            }
+        }
         log.info(
-                "SMTP: JavaMailSender bean={}, host={}, port={}, MAIL_SMTP_SSL={}, EMAIL length={}, EMAIL_PASSWORD set={}",
+                "SMTP: JavaMailSender bean={}, host={}, spring.mail.port={}, effectivePort={}, MAIL_SMTP_SSL={}, EMAIL len={}, EMAIL_PASSWORD set={}",
                 beanPresent,
-                host,
+                effectiveHost,
                 port,
+                effectivePort,
                 ssl,
                 userLen,
                 passSet);

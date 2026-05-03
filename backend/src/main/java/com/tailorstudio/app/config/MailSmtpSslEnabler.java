@@ -46,6 +46,13 @@ public class MailSmtpSslEnabler implements BeanPostProcessor {
         Properties props = impl.getJavaMailProperties();
         props.put("mail.smtp.ssl.enable", "true");
         props.put("mail.smtp.starttls.enable", "false");
+        // Implicit SSL on 465 (some clients need explicit socket factory)
+        props.put("mail.smtp.socketFactory.port", String.valueOf(port));
+        props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+        props.put("mail.smtp.socketFactory.fallback", "false");
+        props.put("mail.smtp.connectiontimeout", "45000");
+        props.put("mail.smtp.timeout", "45000");
+        props.put("mail.smtp.writetimeout", "45000");
         String host = impl.getHost();
         props.put("mail.smtp.ssl.trust", StringUtils.hasText(host) ? host : "smtp.gmail.com");
         return impl;
