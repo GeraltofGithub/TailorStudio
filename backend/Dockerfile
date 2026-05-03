@@ -18,7 +18,8 @@ WORKDIR /app
 ENV PORT=8081
 
 # Better defaults for small instances
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:InitialRAMPercentage=25 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+# preferIPv4Stack: some hosts (incl. cloud) have broken IPv6 routes to Gmail SMTP — avoids connect timeouts.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:InitialRAMPercentage=25 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom -Djava.net.preferIPv4Stack=true"
 
 COPY --from=build /app/target/*.jar /app/app.jar
 

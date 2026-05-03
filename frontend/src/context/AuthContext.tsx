@@ -12,7 +12,7 @@ type AuthState =
 
 type AuthContextValue = {
   state: AuthState
-  refreshMe: (opts?: { silent?: boolean }) => Promise<boolean>
+  refreshMe: (opts?: { silent?: boolean; initialMe?: MeResponse }) => Promise<boolean>
   clearAuth: () => void
 }
 
@@ -32,8 +32,14 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     setState({ status: 'anon', me: null })
   }, [])
 
-  const refreshMe = useCallback(async (opts?: { silent?: boolean }) => {
+  const refreshMe = useCallback(async (opts?: { silent?: boolean; initialMe?: MeResponse }) => {
     const silent = !!opts?.silent
+    const initialMe = opts?.initialMe
+    if (initialMe) {
+      if (!silent) setState({ status: 'loading', me: null })
+      setState({ status: 'authed', me: initialMe })
+      return true
+    }
     if (!silent) setState({ status: 'loading', me: null })
     try {
       const me = await authService.me()

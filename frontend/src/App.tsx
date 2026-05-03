@@ -9,6 +9,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const SignupPage = lazy(() => import('./pages/SignupPage'))
 const JoinPage = lazy(() => import('./pages/JoinPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 
 const DashboardPage = lazy(() => import('./pages/app/DashboardPage'))
 const CustomersPage = lazy(() => import('./pages/app/CustomersPage'))
@@ -31,6 +32,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/join" element={<JoinPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
               <Route path="/app" element={<AppShell />}>
                 <Route index element={<Navigate to="/app/dashboard" replace />} />
