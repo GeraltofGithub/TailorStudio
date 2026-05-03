@@ -19,7 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class OrderService {
@@ -45,8 +49,33 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public List<TailorOrder> list(Long businessId) {
-        var out = orderRepository.findByBusinessIdOrderByCreatedAtDesc(businessId);
-        hydrate(out);
+        List<TailorOrder> out = orderRepository.findListRowsByBusinessId(businessId);
+        if (out.isEmpty()) {
+            return out;
+        }
+        var business = businessRepository.findById(businessId).orElse(null);
+        Set<Long> customerIds = new HashSet<>();
+        for (TailorOrder o : out) {
+            if (o.getCustomerId() != null) {
+                customerIds.add(o.getCustomerId());
+            }
+        }
+        Map<Long, Customer> customersById = new HashMap<>();
+        if (!customerIds.isEmpty()) {
+            for (Customer c : customerRepository.findCardsByBusinessAndIds(businessId, customerIds)) {
+                customersById.put(c.getId(), c);
+            }
+        }
+        for (TailorOrder o : out) {
+            o.setBusiness(business);
+            o.setCustomer(o.getCustomerId() != null ? customersById.get(o.getCustomerId()) : null);
+            o.getLines().clear();
+            o.setMeasurementSnapshotJson(null);
+            o.setNotes(null);
+            o.setMaterialsNotes(null);
+            o.setDemandsNotes(null);
+            o.setPhonePeMerchantOrderId(null);
+        }
         return out;
     }
 

@@ -1,3 +1,5 @@
+import './api/registerCacheHooks'
+
 import { businessApi } from './api/businessApi/businessApi'
 import { customersApi } from './api/customersApi/customersApi'
 import { dashboardApi } from './api/dashboardApi/dashboardApi'

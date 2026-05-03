@@ -2,6 +2,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useMemo, useSt
 import type { ReactNode } from 'react'
 
 import type { MeResponse } from '../services/api/authApi/authApi'
+import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import { authService } from '../services/authService'
 
 type AuthState =
@@ -27,6 +28,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
   const [state, setState] = useState<AuthState>({ status: 'loading', me: null })
 
   const clearAuth = useCallback(() => {
+    resetSessionReadCaches()
     setState({ status: 'anon', me: null })
   }, [])
 
@@ -51,6 +53,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
   // Listen once and immediately clear local auth so AppShell redirects to /login.
   useEffect(() => {
     const onLogout = () => {
+      resetSessionReadCaches()
       setState({ status: 'anon', me: null })
     }
     window.addEventListener('auth:logout', onLogout as EventListener)

@@ -5,6 +5,7 @@ import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import { BASE_URL } from '../utils/constants'
 import { useAuth } from '../context/AuthContext'
+import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import tailorLogo from '../assets/tailor-logo.png'
 
 async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs = 25000) {
@@ -83,6 +84,7 @@ export default memo(function LoginPage() {
                   toast.error('Invalid credentials')
                   return
                 }
+                resetSessionReadCaches()
                 try {
                   sessionStorage.setItem('ts_login_success', '1')
                 } catch {

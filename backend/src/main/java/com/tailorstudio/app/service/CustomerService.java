@@ -97,6 +97,6 @@ public class CustomerService {
     @Transactional(readOnly = true)
     public List<TailorOrder> orderHistory(Long businessId, Long customerId) {
         get(businessId, customerId);
-        return tailorOrderRepository.findByBusinessIdAndCustomerIdOrderByCreatedAtDesc(businessId, customerId);
+        return tailorOrderRepository.findHistoryRowsByBusinessIdAndCustomerId(businessId, customerId);
     }
 }
