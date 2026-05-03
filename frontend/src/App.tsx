@@ -2,7 +2,6 @@ import { Suspense, lazy, memo } from 'react'
 import { Navigate, Route, BrowserRouter, Routes } from 'react-router-dom'
 
 import { AppShell } from './components/AppShell'
-import { LegacyRedirect } from './components/LegacyRedirect'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
 
@@ -10,6 +9,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const SignupPage = lazy(() => import('./pages/SignupPage'))
 const JoinPage = lazy(() => import('./pages/JoinPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 
 const DashboardPage = lazy(() => import('./pages/app/DashboardPage'))
 const CustomersPage = lazy(() => import('./pages/app/CustomersPage'))
@@ -29,24 +29,10 @@ function App() {
           <Suspense fallback={<div className="auth-page">Loading…</div>}>
             <Routes>
               <Route path="/" element={<LandingPage />} />
-              <Route path="/index.html" element={<LegacyRedirect to="/" />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/join" element={<JoinPage />} />
-
-              {/* Backward compatible .html routes (Spring redirects here after form login) */}
-              <Route path="/login.html" element={<LegacyRedirect to="/login" />} />
-              <Route path="/signup.html" element={<LegacyRedirect to="/signup" />} />
-              <Route path="/join.html" element={<LegacyRedirect to="/join" />} />
-              <Route path="/app/dashboard.html" element={<LegacyRedirect to="/app/dashboard" />} />
-              <Route path="/app/customers.html" element={<LegacyRedirect to="/app/customers" />} />
-              <Route path="/app/customer.html" element={<LegacyRedirect to="/app/customer" />} />
-              <Route path="/app/orders.html" element={<LegacyRedirect to="/app/orders" />} />
-              <Route path="/app/order.html" element={<LegacyRedirect to="/app/order" />} />
-              <Route path="/app/payments.html" element={<LegacyRedirect to="/app/payments" />} />
-              <Route path="/app/team.html" element={<LegacyRedirect to="/app/team" />} />
-              <Route path="/app/settings.html" element={<LegacyRedirect to="/app/settings" />} />
-              <Route path="/app/phonepe-return.html" element={<LegacyRedirect to="/app/phonepe-return" />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
               <Route path="/app" element={<AppShell />}>
                 <Route index element={<Navigate to="/app/dashboard" replace />} />

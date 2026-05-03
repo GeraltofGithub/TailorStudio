@@ -91,6 +91,13 @@ h3 {
   width: 36px;
   height: 36px;
 }
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  display: inline-block;
+  flex: 0 0 auto;
+}
 
 .landing-nav {
   display: flex;
@@ -342,6 +349,16 @@ textarea {
   background:
     radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201, 162, 39, 0.12), transparent 50%),
     var(--bg);
+}
+.auth-with-header {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201, 162, 39, 0.12), transparent 50%),
+    var(--bg);
+}
+.auth-with-header .auth-page {
+  min-height: calc(100vh - 72px);
+  background: transparent;
 }
 
 .auth-card {
@@ -765,7 +782,7 @@ table.data tr:hover td {
   margin-top: 1.5rem;
 }
 
-@media (min-width: 1400px) {
+@media (min-width: 1024px) {
   .receipt-previews {
     grid-template-columns: 1fr 1fr;
   }

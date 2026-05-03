@@ -1,9 +1,10 @@
-import Cookies from 'js-cookie'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, Navigate } from 'react-router-dom'
 
 import { useAuth } from '../context/AuthContext'
 import { useAppToast } from '../utils/toast'
+import { api } from '../services/api/api'
+import tailorLogo from '../assets/tailor-logo.png'
 
 type NavItem = { href: string; id: string; label: string; icon: string }
 
@@ -50,41 +51,17 @@ export const AppShell = memo(function AppShell() {
     if (signingOut) return
     setSigningOut(true)
 
-    // CSRF token cookie might not exist yet (SPA doesn't hit backend HTML pages).
-    // Force token cookie issuance by touching an authenticated endpoint first.
-    async function ensureCsrfCookie() {
-      let csrf = Cookies.get('XSRF-TOKEN') || ''
-      if (!csrf) {
-        await fetch('/api/me', { credentials: 'include', cache: 'no-store' }).catch(() => null)
-        csrf = Cookies.get('XSRF-TOKEN') || ''
-      }
-      return csrf
-    }
+    // Use the shared API client so CSRF is sourced from X-XSRF-TOKEN response headers
+    // (critical for cross-origin cookie setups like Vercel + Render).
+    const res = await api.postFormLogout('/logout', new URLSearchParams()).catch(() => null)
 
-    async function postLogout(csrf: string) {
-      return fetch('/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: csrf
-          ? { 'Content-Type': 'application/x-www-form-urlencoded', 'X-XSRF-TOKEN': csrf }
-          : { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(csrf ? { _csrf: csrf } : {}).toString(),
-        redirect: 'follow',
-      }).catch(() => null)
-    }
-
-    let csrf = await ensureCsrfCookie()
-    let res = await postLogout(csrf)
-
-    // If CSRF was missing/stale, Spring returns 403. Retry once after forcing a fresh CSRF cookie.
-    if (res && res.status === 403) {
-      await fetch('/api/me', { credentials: 'include', cache: 'no-store' }).catch(() => null)
-      csrf = await ensureCsrfCookie()
-      res = await postLogout(csrf)
-    }
-
-    // Spring Security logout often responds with 302 redirect to /index.html.
-    const success = !!res && (res.ok || (res.status >= 300 && res.status < 400))
+    // Prefer 204 from API; if backend still redirects, fetch is configured with redirect:'manual' so we don't follow HTML pages on the API host.
+    const success =
+      !!res &&
+      (res.ok ||
+        res.type === 'opaqueredirect' ||
+        (res.status >= 300 && res.status < 400) ||
+        res.status === 0)
     if (!success) {
       toast.error('Logout failed. Please retry.')
       setSigningOut(false)
@@ -116,16 +93,7 @@ export const AppShell = memo(function AppShell() {
     <div className="app-layout">
       <aside className="sidebar no-print">
         <div className="sidebar-brand">
-          <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect x="2" y="2" width="36" height="36" rx="8" stroke="url(#g)" strokeWidth="2" />
-            <path d="M12 28L20 10L28 28" stroke="#c9a227" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            <defs>
-              <linearGradient id="g" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#2dd4bf" />
-                <stop offset="1" stopColor="#c9a227" />
-              </linearGradient>
-            </defs>
-          </svg>
+          <img src={tailorLogo} alt="Tailor Studio logo" className="brand-logo" />
           <div>
             <div className="studio-name">{me.businessName || 'Studio'}</div>
             <div className="studio-tag">Tailor workspace</div>

@@ -182,6 +182,9 @@ export default memo(function CustomerPage() {
   const cid = sp.get('id') ? Number(sp.get('id')) : null
   const nav = useNavigate()
   const toast = useAppToast()
+  const [creatingCustomer, setCreatingCustomer] = useState(false)
+  const [savingDetails, setSavingDetails] = useState(false)
+  const [savingMeasurements, setSavingMeasurements] = useState(false)
 
   const [templates, setTemplates] = useState<TemplatesMap>({})
   const [customer, setCustomer] = useState<any | null>(null)
@@ -273,10 +276,13 @@ export default memo(function CustomerPage() {
 
   const saveMeasurement = useCallback(async () => {
     if (!cid) return
+    if (savingMeasurements) return
+    setSavingMeasurements(true)
     const g = activeGarment
     const reqMissing = missingRequiredFields(activeFields || [], activePayload)
     if (reqMissing.length) {
       toast.error(`Please fill required fields: ${reqMissing.slice(0, 4).map((x) => x.label).join(', ')}${reqMissing.length > 4 ? '…' : ''}`)
+      setSavingMeasurements(false)
       return
     }
     try {
@@ -284,13 +290,17 @@ export default memo(function CustomerPage() {
       toast.success('Measurements saved')
     } catch {
       toast.error('Could not save measurements. Please try again.')
+    } finally {
+      setSavingMeasurements(false)
     }
-  }, [activeFields, activeGarment, activePayload, cid, toast])
+  }, [activeFields, activeGarment, activePayload, cid, savingMeasurements, toast])
 
   const saveCustomerDetails = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       if (!cid) return
+      if (savingDetails) return
+      setSavingDetails(true)
       const fd = new FormData(e.currentTarget)
       const body = {
         name: String(fd.get('name') || ''),
@@ -304,13 +314,17 @@ export default memo(function CustomerPage() {
       } catch (err: any) {
         const msg = err?.payload?.message || err?.payload?.error || err?.message
         toast.error(msg ? String(msg) : 'Could not save customer details. Please try again.')
+      } finally {
+        setSavingDetails(false)
       }
     },
-    [cid, toast]
+    [cid, savingDetails, toast]
   )
 
   const createCustomer = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (creatingCustomer) return
+    setCreatingCustomer(true)
     const fd = new FormData(e.currentTarget)
     const body = {
       name: String(fd.get('name') || '').trim(),
@@ -324,6 +338,7 @@ export default memo(function CustomerPage() {
     } catch (err: any) {
       const msg = err?.payload?.message || err?.payload?.error || err?.message
       toast.error(msg ? String(msg) : 'Could not save customer. Please try again.')
+      setCreatingCustomer(false)
       return
     }
     const failed: string[] = []
@@ -340,7 +355,8 @@ export default memo(function CustomerPage() {
     if (failed.length) toast.error(`Customer saved. Could not save measurements for: ${failed.join(', ')}.`)
     else toast.success('Customer saved')
     nav(`/app/customer?id=${created.id}`)
-  }, [nav, newDraft, toast])
+    setCreatingCustomer(false)
+  }, [creatingCustomer, nav, newDraft, toast])
 
   if (!cid) {
     const g = newActiveGarment
@@ -426,8 +442,8 @@ export default memo(function CustomerPage() {
               <p style={{ margin: '0.75rem 0 0', fontSize: '0.82rem', color: 'var(--muted)' }}>Optional — add now or later from the customer profile.</p>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '1.25rem' }}>
-              Save customer
+            <button type="submit" className="btn btn-primary" style={{ marginTop: '1.25rem' }} disabled={creatingCustomer}>
+              {creatingCustomer ? 'Saving…' : 'Save customer'}
             </button>
           </form>
         </div>
@@ -472,8 +488,8 @@ export default memo(function CustomerPage() {
                 <option value="CM">Centimetres (cm)</option>
               </select>
             </div>
-            <button type="submit" className="btn btn-primary">
-              Save details
+            <button type="submit" className="btn btn-primary" disabled={savingDetails}>
+              {savingDetails ? 'Saving…' : 'Save details'}
             </button>
           </form>
         </div>
@@ -509,8 +525,15 @@ export default memo(function CustomerPage() {
             ) : (
               <>
                 <MeasureEditor garment={activeGarment} fields={fields} payload={activePayload} radioPrefix="u-" onChange={setActivePayload} />
-                <button type="button" className="btn btn-primary" id="saveM" style={{ marginTop: '1rem' }} onClick={() => void saveMeasurement()}>
-                  Save {activeGarment}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  id="saveM"
+                  style={{ marginTop: '1rem' }}
+                  disabled={savingMeasurements}
+                  onClick={() => void saveMeasurement()}
+                >
+                  {savingMeasurements ? 'Saving…' : `Save ${activeGarment}`}
                 </button>
               </>
             )}

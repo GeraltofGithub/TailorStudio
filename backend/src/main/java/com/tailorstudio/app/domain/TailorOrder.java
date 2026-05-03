@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Document(collection = "orders")
+@CompoundIndex(name = "orders_business_created", def = "{'businessId': 1, 'createdAt': -1}")
 @JsonIgnoreProperties(value = {"business"}, allowSetters = true)
 public class TailorOrder {
 

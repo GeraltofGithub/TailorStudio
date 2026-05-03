@@ -27,7 +27,7 @@ public class CorsConfig {
         cfg.setAllowCredentials(true);
         cfg.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN", "X-Requested-With", "Accept", "Origin"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cfg.setExposedHeaders(List.of("Location"));
+        cfg.setExposedHeaders(List.of("Location", "X-XSRF-TOKEN"));
 
         List<String> origins = List.of(allowedOriginsRaw.split(","))
                 .stream()

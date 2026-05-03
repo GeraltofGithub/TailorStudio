@@ -1,75 +1,74 @@
-import Cookies from 'js-cookie'
-
 import { BASE_URL } from '../../utils/constants'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 class Api {
   private _csrfPrimed = false
+  private _csrfToken = ''
 
   private _joinUrl(path: string) {
     if (!BASE_URL) return path
     return `${BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`
   }
 
-  private async _ensureCsrfCookie() {
-    const existing = Cookies.get('XSRF-TOKEN')
-    if (existing) {
+  private async _ensureCsrfToken() {
+    if (this._csrfToken) {
       this._csrfPrimed = true
-      return existing
+      return this._csrfToken
     }
-    // Spring issues CSRF token cookie on (some) GETs; touch a backend endpoint first.
     try {
-      await fetch(this._joinUrl('/api/me'), { method: 'GET', credentials: 'include', cache: 'no-store' })
-    } catch {
-      // ignore
-    }
-    // Cookie set via Set-Cookie can be visible slightly after the fetch resolves.
-    for (let i = 0; i < 8; i++) {
-      const t = Cookies.get('XSRF-TOKEN')
+      const r = await fetch(this._joinUrl('/api/me'), { method: 'GET', credentials: 'include', cache: 'no-store' })
+      const t = r.headers.get('x-xsrf-token') || r.headers.get('X-XSRF-TOKEN') || ''
       if (t) {
+        this._csrfToken = t
         this._csrfPrimed = true
         return t
       }
-      await new Promise((r) => window.setTimeout(r, 25))
+    } catch {
+      // ignore
     }
-    const t = Cookies.get('XSRF-TOKEN') || ''
-    if (t) this._csrfPrimed = true
-    return t
+    return this._csrfToken
   }
 
   private _csrfHeaders(contentType: string) {
-    const t = Cookies.get('XSRF-TOKEN')
     const h: Record<string, string> = { Accept: 'application/json' }
     if (contentType) h['Content-Type'] = contentType
-    if (t) h['X-XSRF-TOKEN'] = t
+    if (this._csrfToken) h['X-XSRF-TOKEN'] = this._csrfToken
     return h
   }
 
-  private async _request<T>(method: HttpMethod, url: string, body?: unknown): Promise<T> {
+  private async _request<T>(method: HttpMethod, url: string, body?: unknown, fetchOpts?: { signal?: AbortSignal }): Promise<T> {
     const hasBody = body !== undefined && body !== null && method !== 'GET'
     const contentType = hasBody ? 'application/json' : ''
     const isWrite = method !== 'GET'
 
-    // Prime CSRF once before the first write, so the very first POST/PUT/PATCH/DELETE never fails.
-    if (isWrite && !this._csrfPrimed) await this._ensureCsrfCookie()
+    // Prime CSRF once before the first write (skip public /api/auth/* — CSRF ignored there; /api/me would 401 before login).
+    const authPublicWrite = url.startsWith('/api/auth/')
+    if (isWrite && !this._csrfPrimed && !authPublicWrite) await this._ensureCsrfToken()
 
     const doFetch = async () =>
       fetch(this._joinUrl(url), {
         method,
         credentials: 'include',
-        cache: 'no-store',
+        cache: method === 'GET' ? 'default' : 'no-store',
         headers: this._csrfHeaders(contentType),
         body: hasBody ? JSON.stringify(body) : undefined,
+        signal: fetchOpts?.signal,
       })
 
     let r = await doFetch()
+
+    const nextToken = r.headers.get('x-xsrf-token') || r.headers.get('X-XSRF-TOKEN') || ''
+    if (nextToken) {
+      this._csrfToken = nextToken
+      this._csrfPrimed = true
+    }
 
     // If CSRF cookie was missing/stale, Spring returns 403 and also sets XSRF-TOKEN cookie.
     // Retry once after ensuring the cookie exists.
     if (isWrite && r.status === 403) {
       this._csrfPrimed = false
-      await this._ensureCsrfCookie()
+      await this._ensureCsrfToken()
       r = await doFetch()
     }
 
@@ -100,12 +99,54 @@ class Api {
     return (await r.json()) as T
   }
 
+  /**
+   * Spring Security logout is a form POST that typically responds with a redirect/HTML (not JSON).
+   * Use the same CSRF priming + retry logic as JSON requests, but do not attempt JSON parsing.
+   */
+  async postFormLogout(url: string, body: URLSearchParams): Promise<Response> {
+    const contentType = 'application/x-www-form-urlencoded'
+    const isWrite = true
+
+    if (isWrite && !this._csrfPrimed) await this._ensureCsrfToken()
+
+    const doFetch = async () =>
+      fetch(this._joinUrl(url), {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        // Avoid following Spring's legacy HTML redirects on the API host (often 404 for SPAs).
+        redirect: 'manual',
+        headers: this._csrfHeaders(contentType),
+        body: body.toString(),
+      })
+
+    let r = await doFetch()
+
+    const nextToken = r.headers.get('x-xsrf-token') || r.headers.get('X-XSRF-TOKEN') || ''
+    if (nextToken) {
+      this._csrfToken = nextToken
+      this._csrfPrimed = true
+    }
+
+    if (isWrite && r.status === 403) {
+      this._csrfPrimed = false
+      await this._ensureCsrfToken()
+      r = await doFetch()
+    }
+
+    if (r.status === 401) {
+      window.dispatchEvent(new CustomEvent('auth:logout'))
+    }
+
+    return r
+  }
+
   _get<T = unknown>(url: string): Promise<T> {
     return this._request<T>('GET', url)
   }
 
-  _post<T = unknown>(url: string, data?: unknown): Promise<T> {
-    return this._request<T>('POST', url, data ?? {})
+  _post<T = unknown>(url: string, data?: unknown, fetchOpts?: { signal?: AbortSignal }): Promise<T> {
+    return this._request<T>('POST', url, data ?? {}, fetchOpts)
   }
 
   _put<T = unknown>(url: string, data?: unknown): Promise<T> {
