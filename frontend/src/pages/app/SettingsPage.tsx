@@ -2,15 +2,20 @@ import { memo, useCallback, useState } from 'react'
 
 import { appService } from '../../services/appService'
 import { useAuth } from '../../context/AuthContext'
+import { useAppToast } from '../../utils/toast'
 
 export default memo(function SettingsPage() {
   const { state, refreshMe } = useAuth()
   const [sm, setSm] = useState('')
+  const toast = useAppToast()
+  const [saving, setSaving] = useState(false)
   const me: any = state.status === 'authed' ? (state.me as any) : null
 
   const onSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
+      if (saving) return
+      setSaving(true)
       setSm('')
       const fd = new FormData(e.currentTarget)
       const body = {
@@ -22,13 +27,15 @@ export default memo(function SettingsPage() {
       }
       try {
         await appService.business.update(body)
-        setSm('Saved.')
+        toast.success('Saved')
         await refreshMe()
       } catch {
-        setSm('Could not save.')
+        toast.error('Could not save. Please try again.')
+      } finally {
+        setSaving(false)
       }
     },
-    [refreshMe]
+    [refreshMe, saving, toast]
   )
 
   if (state.status !== 'authed') return null
@@ -69,8 +76,8 @@ export default memo(function SettingsPage() {
               <input name="secondaryPhone" defaultValue={me.secondaryPhone || ''} />
             </div>
           </div>
-          <button type="submit" className="btn btn-primary">
-            Save
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </form>
         <p id="sm" style={{ marginTop: '1rem' }}>

@@ -20,6 +20,7 @@ export default memo(function CustomersPage() {
   const nav = useNavigate()
   const toast = useAppToast()
   const [list, setList] = useState<Customer[]>([])
+  const [togglingId, setTogglingId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const pageSize = 15
 
@@ -114,7 +115,10 @@ export default memo(function CustomersPage() {
                             type="button"
                             className="btn btn-ghost btn-sm ts-icon-btn"
                             aria-label="Enable customer"
+                            disabled={togglingId === c.id}
                             onClick={async () => {
+                              if (togglingId === c.id) return
+                              setTogglingId(c.id)
                               try {
                                 await appService.customers.enable(c.id)
                                 setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: true } : x)))
@@ -122,6 +126,8 @@ export default memo(function CustomersPage() {
                               } catch (e: any) {
                                 const msg = e?.payload?.message || e?.payload?.error || e?.message
                                 toast.error(msg ? String(msg) : 'Could not enable customer. Please try again.')
+                              } finally {
+                                setTogglingId(null)
                               }
                             }}
                           >
@@ -132,7 +138,10 @@ export default memo(function CustomersPage() {
                             type="button"
                             className="btn btn-ghost btn-sm ts-icon-btn"
                             aria-label="Disable customer"
+                            disabled={togglingId === c.id}
                             onClick={async () => {
+                              if (togglingId === c.id) return
+                              setTogglingId(c.id)
                               try {
                                 await appService.customers.disable(c.id)
                                 setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, active: false } : x)))
@@ -140,6 +149,8 @@ export default memo(function CustomersPage() {
                               } catch (e: any) {
                                 const msg = e?.payload?.message || e?.payload?.error || e?.message
                                 toast.error(msg ? String(msg) : 'Could not disable customer. Please try again.')
+                              } finally {
+                                setTogglingId(null)
                               }
                             }}
                           >

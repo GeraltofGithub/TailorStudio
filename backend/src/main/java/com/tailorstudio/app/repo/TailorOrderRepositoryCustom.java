@@ -14,5 +14,9 @@ public interface TailorOrderRepositoryCustom {
     BigDecimal sumDeliveredIncomeBetween(Long businessId, OrderStatus delivered, Instant start, Instant end);
 
     List<TailorOrder> findDueBetweenWithDetails(LocalDate from, LocalDate to, OrderStatus delivered);
+
+    List<TailorOrder> findListRowsByBusinessId(Long businessId);
+
+    List<TailorOrder> findHistoryRowsByBusinessIdAndCustomerId(Long businessId, Long customerId);
 }
 

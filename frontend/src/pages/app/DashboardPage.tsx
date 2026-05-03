@@ -42,8 +42,10 @@ export default memo(function DashboardPage() {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const s = await appService.dashboard.stats()
-      const orders = (await appService.orders.list()) as unknown as OrderRow[]
+      const [s, orders] = await Promise.all([
+        appService.dashboard.stats(),
+        appService.orders.list() as unknown as Promise<OrderRow[]>,
+      ])
       if (!alive) return
       setStats(s)
       setRecent((orders || []).slice(0, 8))

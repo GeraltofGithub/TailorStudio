@@ -1,20 +1,30 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { authService } from '../services/authService'
+import { useAppToast } from '../utils/toast'
+import { Eye, EyeOff } from 'lucide-react'
+import tailorLogo from '../assets/tailor-logo.png'
 
-type Msg = { kind: 'success' | 'error'; text: string } | null
+async function signupWithTimeout<T>(p: Promise<T>, timeoutMs = 25000): Promise<T> {
+  return await Promise.race([
+    p,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error('timeout')), timeoutMs)
+    }),
+  ])
+}
 
 export default memo(function SignupPage() {
-  const [msg, setMsg] = useState<Msg>(null)
   const [pending, setPending] = useState(false)
   const nav = useNavigate()
+  const toast = useAppToast()
+  const [showPass, setShowPass] = useState(false)
 
   const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (pending) return
     setPending(true)
-    setMsg(null)
 
     const fd = new FormData(e.currentTarget)
     const body = {
@@ -29,28 +39,36 @@ export default memo(function SignupPage() {
     }
 
     try {
-      const data = await authService.signup(body)
-      setMsg({ kind: 'success', text: data.message || 'Created.' })
-      window.setTimeout(() => nav('/login'), 900)
+      const data = await signupWithTimeout(authService.signup(body))
+      toast.success(data.message || 'Studio created')
+      nav('/login', { replace: true })
     } catch (e: any) {
-      setMsg({ kind: 'error', text: e?.payload?.error || e?.payload?.message || e?.message || 'Could not create studio' })
+      const msg = e?.message === 'timeout' ? 'Create studio is taking too long. Please retry in a few seconds.' : e?.payload?.error || e?.payload?.message || e?.message
+      toast.error(msg ? String(msg) : 'Could not create studio. Please try again.')
     }
 
     setPending(false)
-  }, [nav, pending])
-
-  const msgNode = useMemo(() => {
-    if (!msg) return null
-    return <div className={`alert ${msg.kind === 'success' ? 'alert-success' : 'alert-error'}`}>{msg.text}</div>
-  }, [msg])
+  }, [nav, pending, toast])
 
   return (
-    <div className="auth-page">
-      <div className="auth-card" style={{ maxWidth: 520 }}>
+    <div className="auth-with-header">
+      <header className="landing-header">
+        <Link to="/" className="logo-mark">
+          <img src={tailorLogo} alt="Tailor Studio logo" className="brand-logo" />
+          Tailor Studio
+        </Link>
+        <nav className="landing-nav">
+          <Link className="btn btn-ghost" to="/login">
+            Sign in
+          </Link>
+        </nav>
+      </header>
+      <div className="auth-page">
+        <div className="auth-card" style={{ maxWidth: 520 }}>
         <h1>Create your studio</h1>
         <p className="sub">You become the owner. You’ll get a join code to invite staff.</p>
-        <div id="msg">{msgNode}</div>
-        <form id="f" onSubmit={onSubmit}>
+          <form id="f" onSubmit={onSubmit}>
+            <fieldset disabled={pending} style={{ border: 'none', margin: 0, padding: 0, display: 'grid', gap: '1rem' }}>
           <div className="form-grid two">
             <div>
               <label htmlFor="businessName">Studio name</label>
@@ -88,15 +106,46 @@ export default memo(function SignupPage() {
           </div>
           <div>
             <label htmlFor="password">Password (min 8)</label>
-            <input type="password" id="password" name="password" required minLength={8} maxLength={100} autoComplete="new-password" />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPass ? 'text' : 'password'}
+                id="password"
+                name="password"
+                required
+                minLength={8}
+                maxLength={100}
+                autoComplete="new-password"
+                style={{ paddingRight: '2.4rem' }}
+              />
+              <button
+                type="button"
+                className="ts-icon-btn"
+                aria-label={showPass ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPass((v) => !v)}
+                style={{
+                  position: 'absolute',
+                  right: '0.35rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={pending}>
             {pending ? 'Creating…' : 'Create studio'}
           </button>
+            </fieldset>
         </form>
         <p className="auth-footer">
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
+        </div>
       </div>
     </div>
   )

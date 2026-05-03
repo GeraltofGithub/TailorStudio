@@ -2,6 +2,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useMemo, useSt
 import type { ReactNode } from 'react'
 
 import type { MeResponse } from '../services/api/authApi/authApi'
+import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import { authService } from '../services/authService'
 
 type AuthState =
@@ -11,7 +12,7 @@ type AuthState =
 
 type AuthContextValue = {
   state: AuthState
-  refreshMe: () => Promise<void>
+  refreshMe: (opts?: { silent?: boolean }) => Promise<boolean>
   clearAuth: () => void
 }
 
@@ -27,18 +28,20 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
   const [state, setState] = useState<AuthState>({ status: 'loading', me: null })
 
   const clearAuth = useCallback(() => {
+    resetSessionReadCaches()
     setState({ status: 'anon', me: null })
   }, [])
 
-  const refreshMe = useCallback(async () => {
-    setState({ status: 'loading', me: null })
+  const refreshMe = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = !!opts?.silent
+    if (!silent) setState({ status: 'loading', me: null })
     try {
       const me = await authService.me()
       setState({ status: 'authed', me })
-      return
+      return true
     } catch {
       setState({ status: 'anon', me: null })
-      return
+      return false
     }
   }, [])
 
@@ -50,6 +53,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
   // Listen once and immediately clear local auth so AppShell redirects to /login.
   useEffect(() => {
     const onLogout = () => {
+      resetSessionReadCaches()
       setState({ status: 'anon', me: null })
     }
     window.addEventListener('auth:logout', onLogout as EventListener)

@@ -127,7 +127,6 @@ export default memo(function OrderPage() {
   const [orderMissing, setOrderMissing] = useState(false)
 
   const [customers, setCustomers] = useState<any[]>([])
-  const [customerPhoneMap, setCustomerPhoneMap] = useState<Record<string, string>>({})
 
   const [customerId, setCustomerId] = useState<string>('')
   const [garmentType, setGarmentType] = useState<Garment>('SHIRT')
@@ -153,18 +152,17 @@ export default memo(function OrderPage() {
   const [measureEditorOpen, setMeasureEditorOpen] = useState(false)
   const [pendingProfileSave, setPendingProfileSave] = useState(false)
 
-  const [waPhone, setWaPhone] = useState('')
-  const [waDate, setWaDate] = useState('')
-  const [waIncPay, setWaIncPay] = useState(true)
-  const [waIncDate, setWaIncDate] = useState(true)
-  const [waPreview, setWaPreview] = useState<string>('')
-
   const [paymentInfo, setPaymentInfo] = useState<any>({ phonePeConfigured: false })
   const [payModalOpen, setPayModalOpen] = useState(false)
   const [payStep, setPayStep] = useState<'choice' | 'cash' | 'online'>('choice')
   const [payCashAmt, setPayCashAmt] = useState<string>('')
   const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [pullingMeasurements, setPullingMeasurements] = useState(false)
+  const [syncingPhonePe, setSyncingPhonePe] = useState(false)
+  const [recordingCash, setRecordingCash] = useState(false)
+  const [initiatingOnlinePay, setInitiatingOnlinePay] = useState(false)
+  const [markingPaid, setMarkingPaid] = useState(false)
 
   const receiptPayRef = useRef<HTMLDivElement | null>(null)
   const orderSlipRef = useRef<HTMLDivElement | null>(null)
@@ -208,11 +206,6 @@ export default memo(function OrderPage() {
       const list = await appService.customers.listActive()
       if (!alive) return
       setCustomers(list || [])
-      const map: Record<string, string> = {}
-      ;(list || []).forEach((c: any) => {
-        map[String(c.id)] = c.phone || ''
-      })
-      setCustomerPhoneMap(map)
     })()
     return () => {
       alive = false
@@ -263,10 +256,6 @@ export default memo(function OrderPage() {
       const ea = Number(extraLine.amount) || 0
       setExtraAmt(ea > 0 ? String(ea) : '')
     }
-
-    const cust = existing.customer || null
-    setWaPhone(cust?.phone || '')
-    setWaDate(isoDate(existing.deliveryDate))
   }, [existingOrder])
 
   const rankOfStatus = useCallback((s: Status) => {
@@ -410,6 +399,8 @@ export default memo(function OrderPage() {
       toast.error('Select a customer first.')
       return
     }
+    if (pullingMeasurements) return
+    setPullingMeasurements(true)
     try {
       const m = await appService.customers.getMeasurement(Number(customerId), garmentType)
       const payload = parsePayloadJson(String(m?.dataJson || '{}'))
@@ -427,8 +418,10 @@ export default memo(function OrderPage() {
     } catch (e: any) {
       const msg = e?.payload?.message || e?.payload?.error || e?.message
       toast.error(msg ? String(msg) : 'Could not copy measurements. Please try again.')
+    } finally {
+      setPullingMeasurements(false)
     }
-  }, [customerId, garmentType, toast])
+  }, [customerId, garmentType, pullingMeasurements, toast])
 
   const saveMeasurementsToProfile = useCallback(async () => {
     if (!customerId) {
@@ -447,18 +440,6 @@ export default memo(function OrderPage() {
     setPendingProfileSave(true)
     toast.success(`${garmentType} measurements added to order`)
   }, [customerId, garmentType, measureDraft, templates, toast])
-
-  const waMessageText = useCallback(() => {
-    const custOpt = customers.find((c) => String(c.id) === String(customerId))
-    const custLabel = custOpt ? `${custOpt.name} — ${custOpt.phone}` : ''
-    const delivery = waDate || deliveryDate
-    const parts: string[] = [`Hello ${custLabel ? custLabel.split(' — ')[0] : 'Customer'},`]
-    parts.push(`Your order for ${garmentType} is in process.`)
-    if (waIncPay) parts.push(`Payment update: Total Rs ${totals.sum.toFixed(2)}, Paid Rs ${totals.adv.toFixed(2)}, Balance Rs ${totals.bal.toFixed(2)}.`)
-    if (waIncDate && delivery) parts.push(`Expected delivery date: ${delivery}.`)
-    parts.push(`Thank you, ${studio.name || 'Tailor Studio'}`)
-    return parts.join('\n')
-  }, [customers, customerId, deliveryDate, garmentType, studio.name, totals, waDate, waIncDate, waIncPay])
 
   const billDescTouchedRef = useRef(false)
   useEffect(() => {
@@ -641,7 +622,6 @@ export default memo(function OrderPage() {
                     disabled={isCompleted}
                     onChange={(e) => {
                       setCustomerId(e.target.value)
-                      setWaPhone(customerPhoneMap[String(e.target.value)] || '')
                     }}
                   >
                     <option value="">Choose customer…</option>
@@ -678,6 +658,7 @@ export default memo(function OrderPage() {
                     required
                     value={orderDate}
                     disabled={isCompleted}
+                    onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={(e) => setOrderDate(e.target.value)}
                   />
                 </div>
@@ -689,9 +670,9 @@ export default memo(function OrderPage() {
                     required
                     value={deliveryDate}
                     disabled={isCompleted}
+                    onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
                     onChange={(e) => {
                       setDeliveryDate(e.target.value)
-                      setWaDate(e.target.value)
                     }}
                   />
                 </div>
@@ -888,8 +869,11 @@ export default memo(function OrderPage() {
                             className="btn btn-ghost btn-sm"
                             id="btn-sync-phonepe"
                             style={{ display: showSync ? 'inline-block' : 'none' }}
+                            disabled={syncingPhonePe}
                             onClick={async () => {
                               if (!oid) return
+                              if (syncingPhonePe) return
+                              setSyncingPhonePe(true)
                               try {
                                 const data = await appService.orders.phonePeSync(oid)
                                 setExistingOrder(data)
@@ -899,10 +883,12 @@ export default memo(function OrderPage() {
                               } catch (e: any) {
                                 const msg = e?.payload?.error || e?.payload?.message || e?.message
                                 toast.error(msg ? String(msg) : 'Could not sync online payment. Please try again.')
+                              } finally {
+                                setSyncingPhonePe(false)
                               }
                             }}
                           >
-                            Sync online payment
+                            {syncingPhonePe ? 'Syncing…' : 'Sync online payment'}
                           </button>
                         </div>
                         <p id="paid-full-note" style={{ display: canPayActions ? 'none' : 'block', margin: '0.5rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
@@ -967,8 +953,14 @@ export default memo(function OrderPage() {
                   <h2 style={{ fontSize: '1rem' }}>
                     Measurements on this order<span className="req-star">*</span>
                   </h2>
-                  <button type="button" className="btn btn-teal btn-sm" id="pullM" disabled={isCompleted} onClick={() => void pullMeasurements()}>
-                    Copy from customer profile
+                  <button
+                    type="button"
+                    className="btn btn-teal btn-sm"
+                    id="pullM"
+                    disabled={isCompleted || pullingMeasurements}
+                    onClick={() => void pullMeasurements()}
+                  >
+                    {pullingMeasurements ? 'Copying…' : 'Copy from customer profile'}
                   </button>
                 </div>
                 <div style={{ padding: '1rem 1.25rem', color: 'var(--muted)', fontSize: '0.88rem' }}>
@@ -992,77 +984,6 @@ export default memo(function OrderPage() {
                 >
                   {snapPreview}
                 </pre>
-              </div>
-
-              <div className="panel" style={{ marginTop: '1rem' }}>
-                <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>WhatsApp customer notification (demo)</h2>
-                </div>
-                <div style={{ padding: '1rem 1.25rem' }} className="wa-demo-box">
-                  <p style={{ margin: '0 0 0.5rem', color: 'var(--muted)', fontSize: '0.86rem' }}>
-                    Demo-only UI: prepares a message with payment and delivery date details.
-                  </p>
-                  <div className="form-grid two">
-                    <div>
-                      <label>Notify customer phone</label>
-                      <input
-                        id="wa-phone"
-                        type="text"
-                        placeholder="Customer phone"
-                        value={waPhone}
-                        disabled={isCompleted}
-                        onChange={(e) => setWaPhone(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label>Expected delivery date</label>
-                      <input id="wa-date" type="date" value={waDate} disabled={isCompleted} onChange={(e) => setWaDate(e.target.value)} />
-                    </div>
-                  </div>
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                    <label style={{ margin: 0, textTransform: 'none', letterSpacing: 'normal', fontSize: '0.88rem' }}>
-                      <input id="wa-inc-pay" type="checkbox" checked={waIncPay} disabled={isCompleted} onChange={(e) => setWaIncPay(e.target.checked)} /> Include payment summary
-                    </label>
-                    <label style={{ margin: 0, textTransform: 'none', letterSpacing: 'normal', fontSize: '0.88rem' }}>
-                      <input id="wa-inc-date" type="checkbox" checked={waIncDate} disabled={isCompleted} onChange={(e) => setWaIncDate(e.target.checked)} /> Include expected delivery date
-                    </label>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-teal btn-sm"
-                    id="wa-preview-btn"
-                    style={{ marginTop: '0.75rem' }}
-                    disabled={isCompleted}
-                    onClick={() => {
-                      const msg = waMessageText()
-                      setWaPreview(msg)
-                    }}
-                  >
-                    Generate demo message
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    id="wa-send-btn"
-                    style={{ marginTop: '0.75rem' }}
-                    disabled={isCompleted}
-                    onClick={() => {
-                      const p = (waPhone || '').trim()
-                      if (!p) {
-                        toast.error('Enter customer phone to preview WhatsApp message.')
-                        return
-                      }
-                      const msg = waMessageText()
-                      setWaPreview(msg)
-                      toast.success('WhatsApp demo message generated')
-                    }}
-                  >
-                    Simulate WhatsApp send
-                  </button>
-                  <div id="wa-preview" className="wa-preview" style={{ display: waPreview ? 'block' : 'none' }}>
-                    {waPreview}
-                  </div>
-                </div>
               </div>
 
               <button
@@ -1138,13 +1059,16 @@ export default memo(function OrderPage() {
                     type="button"
                     className="btn btn-primary"
                     id="pay-cash-submit"
+                    disabled={recordingCash}
                     onClick={async () => {
                       if (!oid) return
+                      if (recordingCash) return
                       const amt = parseFloat(payCashAmt)
                       if (!amt || amt <= 0) {
                         toast.error('Enter the cash amount received.')
                         return
                       }
+                      setRecordingCash(true)
                       try {
                         const data = await appService.orders.payCash(oid, amt)
                         setExistingOrder(data)
@@ -1155,10 +1079,12 @@ export default memo(function OrderPage() {
                       } catch (e: any) {
                         const msg = e?.payload?.error || e?.payload?.message || e?.message
                         toast.error(msg ? String(msg) : 'Could not record cash payment. Please try again.')
+                      } finally {
+                        setRecordingCash(false)
                       }
                     }}
                   >
-                    Record cash
+                    {recordingCash ? 'Recording…' : 'Record cash'}
                   </button>
                   <button type="button" className="btn btn-ghost" id="pay-cash-back" onClick={() => setPayStep('choice')}>
                     Back
@@ -1181,9 +1107,11 @@ export default memo(function OrderPage() {
                     type="button"
                     className="btn btn-primary"
                     id="pay-online-go"
-                    disabled={!paymentInfo?.phonePeConfigured}
+                    disabled={!paymentInfo?.phonePeConfigured || initiatingOnlinePay}
                     onClick={async () => {
                       if (!oid || !paymentInfo?.phonePeConfigured) return
+                      if (initiatingOnlinePay) return
+                      setInitiatingOnlinePay(true)
                       try {
                         const data = await appService.orders.phonePeInitiate(oid)
                         if ((data as any).redirectUrl) window.location.href = (data as any).redirectUrl
@@ -1191,10 +1119,12 @@ export default memo(function OrderPage() {
                       } catch (e: any) {
                         const msg = e?.payload?.error || e?.payload?.message || e?.message
                         toast.error(msg ? String(msg) : 'Could not start PhonePe checkout. Please try again.')
+                      } finally {
+                        setInitiatingOnlinePay(false)
                       }
                     }}
                   >
-                    Pay now
+                    {initiatingOnlinePay ? 'Opening…' : 'Pay now'}
                   </button>
                   <button type="button" className="btn btn-ghost" id="pay-online-back" onClick={() => setPayStep('choice')}>
                     Back
@@ -1243,8 +1173,11 @@ export default memo(function OrderPage() {
               <button
                 type="button"
                 className="btn btn-primary"
+                disabled={markingPaid}
                 onClick={async () => {
                   if (!oid) return
+                  if (markingPaid) return
+                  setMarkingPaid(true)
                   try {
                     const data = await appService.orders.markPaid(oid)
                     setExistingOrder(data)
@@ -1255,10 +1188,12 @@ export default memo(function OrderPage() {
                   } catch (e: any) {
                     const msg = e?.payload?.error || e?.payload?.message || e?.message
                     toast.error(msg ? String(msg) : 'Failed to mark order as paid. Please try again.')
+                  } finally {
+                    setMarkingPaid(false)
                   }
                 }}
               >
-                Confirm
+                {markingPaid ? 'Saving…' : 'Confirm'}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => setMarkPaidConfirmOpen(false)}>
                 Cancel
@@ -1358,7 +1293,7 @@ export default memo(function OrderPage() {
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
                 <button type="button" className="btn btn-primary" onClick={() => void saveMeasurementsToProfile()}>
-                  Save {garmentType} to customer
+                  {`Save ${garmentType} to customer`}
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={() => setMeasureEditorOpen(false)}>
                   Cancel
