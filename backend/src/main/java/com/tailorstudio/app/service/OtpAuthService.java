@@ -14,10 +14,13 @@ import com.tailorstudio.app.repo.PendingLoginRepository;
 import com.tailorstudio.app.repo.UserRepository;
 import com.tailorstudio.app.security.OtpCodeHasher;
 import com.tailorstudio.app.security.StudioUserDetails;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.bson.types.ObjectId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -36,6 +39,8 @@ import java.util.Locale;
 @Service
 public class OtpAuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(OtpAuthService.class);
+
     private static final Duration OTP_TTL = Duration.ofMinutes(2);
     private static final Duration PENDING_LOGIN_TTL = Duration.ofMinutes(10);
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(15);
@@ -51,6 +56,9 @@ public class OtpAuthService {
     private final ApplicationEventPublisher eventPublisher;
     private final String otpPepper;
     private final String brandPublicUrl;
+    private final boolean staticOtpEnabledRaw;
+    private final String staticOtpCodeRaw;
+    private boolean staticOtpActive;
 
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
@@ -65,7 +73,9 @@ public class OtpAuthService {
             UserAuthLookup userAuthLookup,
             ApplicationEventPublisher eventPublisher,
             @Value("${app.otp.pepper}") String otpPepper,
-            @Value("${app.brand.public-url:}") String brandPublicUrl) {
+            @Value("${app.brand.public-url:}") String brandPublicUrl,
+            @Value("${app.otp.static-enabled:false}") boolean staticOtpEnabledRaw,
+            @Value("${app.otp.static-code:}") String staticOtpCodeRaw) {
         this.userRepository = userRepository;
         this.otpChallengeRepository = otpChallengeRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
@@ -77,13 +87,48 @@ public class OtpAuthService {
         this.eventPublisher = eventPublisher;
         this.otpPepper = otpPepper;
         this.brandPublicUrl = brandPublicUrl;
+        this.staticOtpEnabledRaw = staticOtpEnabledRaw;
+        this.staticOtpCodeRaw = staticOtpCodeRaw;
+    }
+
+    @PostConstruct
+    void initStaticOtp() {
+        if (!staticOtpEnabledRaw) {
+            staticOtpActive = false;
+            return;
+        }
+        String digits = staticOtpCodeRaw == null ? "" : staticOtpCodeRaw.replaceAll("\\s+", "");
+        if (!digits.matches("\\d{6}")) {
+            log.error(
+                    "STATIC_OTP_ENABLED is true but STATIC_OTP / app.otp.static-code is not exactly 6 digits — static OTP bypass disabled.");
+            staticOtpActive = false;
+            return;
+        }
+        staticOtpActive = true;
+        log.warn("STATIC OTP bypass is ON (code length 6). Do not use in production with real users.");
+    }
+
+    private boolean staticOtpBypass() {
+        return staticOtpActive;
+    }
+
+    private boolean isSubmittedStaticOtp(String codeRaw) {
+        if (!staticOtpBypass() || codeRaw == null) {
+            return false;
+        }
+        String submitted = codeRaw.replaceAll("\\s+", "");
+        String want = staticOtpCodeRaw.replaceAll("\\s+", "");
+        return want.equals(submitted);
     }
 
     public boolean isMailConfigured() {
         return studioMailSender.isConfigured();
     }
 
-    private void requireMail() {
+    private void requireMailUnlessStaticBypass() {
+        if (staticOtpBypass()) {
+            return;
+        }
         if (!studioMailSender.isConfigured()) {
             throw new IllegalStateException("Email is not configured (set EMAIL and EMAIL_PASSWORD).");
         }
@@ -99,10 +144,9 @@ public class OtpAuthService {
 
     public record LoginChallengeResult(Instant expiresAt, String pendingTokenPlain) {}
 
-    /** Validates email + password, persists challenge, then queues HTML email after commit (fast API). */
     @Transactional
     public LoginChallengeResult startLoginWithPassword(String emailRaw, String passwordRaw) {
-        requireMail();
+        requireMailUnlessStaticBypass();
         User user = userAuthLookup.findByEmailFlexible(emailRaw).orElse(null);
         if (user == null) {
             throw new NoSuchUserException();
@@ -120,19 +164,23 @@ public class OtpAuthService {
         pl.setTokenHash(OtpCodeHasher.sha256Hex(pendingTokenPlain));
         pl.setExpiresAt(Instant.now().plus(PENDING_LOGIN_TTL));
         pendingLoginRepository.save(pl);
-        String code = OtpCodeHasher.newSixDigitOtp();
-        OtpChallenge c = persistChallenge(email, OtpPurpose.LOGIN, code);
-        enqueueOtpEmail(
-                user.getEmail(),
-                "Tailor Studio — sign-in code",
-                StudioOtpEmailHtml.loginPlain(code),
-                StudioOtpEmailHtml.loginEmail(code, brandPublicUrl));
-        return new LoginChallengeResult(c.getExpiresAt(), pendingTokenPlain);
+        Instant expiresAt = Instant.now().plus(OTP_TTL);
+        if (!staticOtpBypass()) {
+            String code = OtpCodeHasher.newSixDigitOtp();
+            OtpChallenge c = persistChallenge(email, OtpPurpose.LOGIN, code);
+            expiresAt = c.getExpiresAt();
+            enqueueOtpEmail(
+                    user.getEmail(),
+                    "Tailor Studio — sign-in code",
+                    StudioOtpEmailHtml.loginPlain(code),
+                    StudioOtpEmailHtml.loginEmail(code, brandPublicUrl));
+        }
+        return new LoginChallengeResult(expiresAt, pendingTokenPlain);
     }
 
     @Transactional
     public Instant resendLoginOtp(String pendingTokenPlain) {
-        requireMail();
+        requireMailUnlessStaticBypass();
         String th = OtpCodeHasher.sha256Hex(pendingTokenPlain.trim());
         PendingLogin pl = pendingLoginRepository.findByTokenHashAndExpiresAtAfter(th, Instant.now()).orElseThrow(OtpInvalidException::new);
         User user = userRepository.findById(pl.getUserId()).orElseThrow(OtpInvalidException::new);
@@ -140,6 +188,9 @@ public class OtpAuthService {
             throw new OtpInvalidException();
         }
         String email = normalizeEmail(pl.getEmail());
+        if (staticOtpBypass()) {
+            return Instant.now().plus(OTP_TTL);
+        }
         String code = OtpCodeHasher.newSixDigitOtp();
         OtpChallenge c = persistChallenge(email, OtpPurpose.LOGIN, code);
         enqueueOtpEmail(
@@ -152,12 +203,15 @@ public class OtpAuthService {
 
     @Transactional
     public Instant sendForgotPasswordOtp(String emailRaw) {
-        requireMail();
+        requireMailUnlessStaticBypass();
         User user = userAuthLookup.findByEmailFlexible(emailRaw).orElse(null);
         if (user == null) {
             throw new NoSuchUserException();
         }
         String email = normalizeEmail(user.getEmail());
+        if (staticOtpBypass()) {
+            return Instant.now().plus(OTP_TTL);
+        }
         String code = OtpCodeHasher.newSixDigitOtp();
         OtpChallenge c = persistChallenge(email, OtpPurpose.PASSWORD_RESET, code);
         enqueueOtpEmail(
@@ -188,6 +242,13 @@ public class OtpAuthService {
             throw new OtpInvalidException();
         }
         Instant now = Instant.now();
+        if (isSubmittedStaticOtp(code)) {
+            otpChallengeRepository.deleteByEmailIgnoreCaseAndPurpose(email, OtpPurpose.LOGIN);
+            pendingLoginRepository.deleteById(pl.getId());
+            User user = userRepository.findById(pl.getUserId()).orElseThrow();
+            establishSession(user, request, response);
+            return;
+        }
         OtpChallenge c = otpChallengeRepository
                 .findTopByEmailIgnoreCaseAndPurposeAndExpiresAtAfterOrderByCreatedAtDesc(email, OtpPurpose.LOGIN, now)
                 .orElse(null);
@@ -208,6 +269,22 @@ public class OtpAuthService {
     @Transactional
     public String verifyForgotOtpAndIssueResetToken(String emailRaw, String code) {
         String email = normalizeEmail(emailRaw);
+        if (isSubmittedStaticOtp(code)) {
+            User user = userAuthLookup.findByEmailFlexible(emailRaw).orElseThrow(OtpInvalidException::new);
+            if (!normalizeEmail(user.getEmail()).equals(normalizeEmail(emailRaw))) {
+                throw new OtpInvalidException();
+            }
+            otpChallengeRepository.deleteByEmailIgnoreCaseAndPurpose(email, OtpPurpose.PASSWORD_RESET);
+            passwordResetTokenRepository.deleteByUserId(user.getId());
+            String token = OtpCodeHasher.randomTokenHex(24);
+            PasswordResetToken pr = new PasswordResetToken();
+            pr.setId(new ObjectId().toHexString());
+            pr.setUserId(user.getId());
+            pr.setTokenHash(OtpCodeHasher.sha256Hex(token));
+            pr.setExpiresAt(Instant.now().plus(RESET_TOKEN_TTL));
+            passwordResetTokenRepository.save(pr);
+            return token;
+        }
         Instant now = Instant.now();
         OtpChallenge c = otpChallengeRepository
                 .findTopByEmailIgnoreCaseAndPurposeAndExpiresAtAfterOrderByCreatedAtDesc(email, OtpPurpose.PASSWORD_RESET, now)
