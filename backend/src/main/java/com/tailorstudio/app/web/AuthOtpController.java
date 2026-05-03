@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 @RestController
@@ -35,12 +37,25 @@ public class AuthOtpController {
         this.mePayloadService = mePayloadService;
     }
 
+    /** Millisecond precision only — avoids JS Date parse issues with nanosecond ISO-8601 from {@link Instant#toString()}. */
+    private static String expiresAtIso(Instant instant) {
+        return instant.truncatedTo(ChronoUnit.MILLIS).toString();
+    }
+
     @PostMapping("/login/challenge")
     public ResponseEntity<Map<String, Object>> loginChallenge(@Valid @RequestBody LoginPasswordChallengeRequest body) {
         try {
             var r = otpAuthService.startLoginWithPassword(body.email(), body.password());
             return ResponseEntity.ok(
-                    Map.of("ok", true, "expiresAt", r.expiresAt().toString(), "pendingToken", r.pendingTokenPlain()));
+                    Map.of(
+                            "ok",
+                            true,
+                            "expiresAt",
+                            expiresAtIso(r.expiresAt()),
+                            "pendingToken",
+                            r.pendingTokenPlain(),
+                            "staticOtp",
+                            otpAuthService.isStaticOtpBypassEnabled()));
         } catch (OtpAuthService.NoSuchUserException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("ok", false, "error", "no_account"));
         } catch (OtpAuthService.BadPasswordException e) {
@@ -55,7 +70,7 @@ public class AuthOtpController {
     public ResponseEntity<Map<String, Object>> loginResend(@Valid @RequestBody LoginOtpResendRequest body) {
         try {
             var exp = otpAuthService.resendLoginOtp(body.pendingToken());
-            return ResponseEntity.ok(Map.of("ok", true, "expiresAt", exp.toString()));
+            return ResponseEntity.ok(Map.of("ok", true, "expiresAt", expiresAtIso(exp)));
         } catch (OtpAuthService.OtpInvalidException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("ok", false, "error", "invalid_pending"));
         } catch (IllegalStateException e) {
@@ -82,7 +97,7 @@ public class AuthOtpController {
     public ResponseEntity<Map<String, Object>> sendForgot(@Valid @RequestBody OtpEmailRequest body) {
         try {
             var exp = otpAuthService.sendForgotPasswordOtp(body.email());
-            return ResponseEntity.ok(Map.of("ok", true, "expiresAt", exp.toString()));
+            return ResponseEntity.ok(Map.of("ok", true, "expiresAt", expiresAtIso(exp)));
         } catch (OtpAuthService.NoSuchUserException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("ok", false, "error", "no_account"));
         } catch (IllegalStateException e) {

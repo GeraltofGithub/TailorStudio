@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
 @Service
@@ -59,6 +60,8 @@ public class OtpAuthService {
     private final boolean staticOtpEnabledRaw;
     private final String staticOtpCodeRaw;
     private boolean staticOtpActive;
+    /** Exactly six digits from {@link #staticOtpCodeRaw}, used for comparison after {@link #initStaticOtp}. */
+    private String staticOtpDigits = "";
 
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
@@ -95,15 +98,18 @@ public class OtpAuthService {
     void initStaticOtp() {
         if (!staticOtpEnabledRaw) {
             staticOtpActive = false;
+            staticOtpDigits = "";
             return;
         }
-        String digits = staticOtpCodeRaw == null ? "" : staticOtpCodeRaw.replaceAll("\\s+", "");
+        String digits = staticOtpCodeRaw == null ? "" : staticOtpCodeRaw.replaceAll("\\D", "");
         if (!digits.matches("\\d{6}")) {
             log.error(
                     "STATIC_OTP_ENABLED is true but STATIC_OTP / app.otp.static-code is not exactly 6 digits — static OTP bypass disabled.");
             staticOtpActive = false;
+            staticOtpDigits = "";
             return;
         }
+        staticOtpDigits = digits;
         staticOtpActive = true;
         log.warn("STATIC OTP bypass is ON (code length 6). Do not use in production with real users.");
     }
@@ -112,13 +118,17 @@ public class OtpAuthService {
         return staticOtpActive;
     }
 
+    /** Exposed for login challenge JSON so the client can skip time-based OTP expiry UX when mail OTP is bypassed. */
+    public boolean isStaticOtpBypassEnabled() {
+        return staticOtpBypass();
+    }
+
     private boolean isSubmittedStaticOtp(String codeRaw) {
         if (!staticOtpBypass() || codeRaw == null) {
             return false;
         }
-        String submitted = codeRaw.replaceAll("\\s+", "");
-        String want = staticOtpCodeRaw.replaceAll("\\s+", "");
-        return want.equals(submitted);
+        String submitted = codeRaw.replaceAll("\\D", "");
+        return staticOtpDigits.equals(submitted);
     }
 
     public boolean isMailConfigured() {
@@ -175,7 +185,7 @@ public class OtpAuthService {
                     StudioOtpEmailHtml.loginPlain(code),
                     StudioOtpEmailHtml.loginEmail(code, brandPublicUrl));
         }
-        return new LoginChallengeResult(expiresAt, pendingTokenPlain);
+        return new LoginChallengeResult(expiresAt.truncatedTo(ChronoUnit.MILLIS), pendingTokenPlain);
     }
 
     @Transactional

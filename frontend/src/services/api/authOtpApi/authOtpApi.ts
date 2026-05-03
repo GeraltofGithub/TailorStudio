@@ -3,10 +3,14 @@ import { api } from '../api'
 
 export type OtpSendOk = { ok: true; expiresAt: string }
 
-export type LoginChallengeOk = { ok: true; expiresAt: string; pendingToken: string }
+export type LoginChallengeOk = { ok: true; expiresAt: string; pendingToken: string; staticOtp?: boolean }
 
-export async function otpLoginChallenge(email: string, password: string): Promise<LoginChallengeOk> {
-  return api._post<LoginChallengeOk>('/api/auth/otp/login/challenge', { email, password })
+export async function otpLoginChallenge(
+  email: string,
+  password: string,
+  opts?: { signal?: AbortSignal },
+): Promise<LoginChallengeOk> {
+  return api._post<LoginChallengeOk>('/api/auth/otp/login/challenge', { email, password }, opts)
 }
 
 export async function otpLoginResend(pendingToken: string): Promise<OtpSendOk> {

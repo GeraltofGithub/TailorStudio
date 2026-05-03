@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { OtpSixBoxes } from '../components/OtpSixBoxes'
@@ -30,6 +30,10 @@ export default memo(function LoginPage() {
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null)
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', ''])
   const [now, setNow] = useState(() => Date.now())
+  /** Server uses static OTP bypass — skip client-only expiry gate (clock skew / ISO parse). */
+  const [staticOtpMode, setStaticOtpMode] = useState(false)
+  const challengeSeqRef = useRef(0)
+  const challengeAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     if (!showError) return
@@ -43,14 +47,20 @@ export default memo(function LoginPage() {
     return () => window.clearInterval(t)
   }, [phase, otpExpiresAt])
 
-  const otpExpired = useMemo(() => {
+  const otpExpiredClient = useMemo(() => {
     if (!otpExpiresAt) return true
-    return Date.now() >= new Date(otpExpiresAt).getTime()
+    const t = new Date(otpExpiresAt).getTime()
+    if (Number.isNaN(t)) return false
+    return Date.now() >= t
   }, [otpExpiresAt, now])
+
+  const otpExpiredEffective = staticOtpMode ? false : otpExpiredClient
 
   const otpRemainingSec = useMemo(() => {
     if (!otpExpiresAt) return 0
-    return Math.max(0, Math.ceil((new Date(otpExpiresAt).getTime() - Date.now()) / 1000))
+    const t = new Date(otpExpiresAt).getTime()
+    if (Number.isNaN(t)) return 0
+    return Math.max(0, Math.ceil((t - Date.now()) / 1000))
   }, [otpExpiresAt, now])
 
   const resendOtp = useCallback(async () => {
@@ -82,7 +92,7 @@ export default memo(function LoginPage() {
       toast.error('Enter the 6-digit code.')
       return
     }
-    if (otpExpired) {
+    if (otpExpiredEffective) {
       toast.error('Code expired. Tap Resend code.')
       return
     }
@@ -107,12 +117,14 @@ export default memo(function LoginPage() {
     } finally {
       setPending(false)
     }
-  }, [nav, otpDigits, loginEmail, otpExpired, pending, pendingToken, refreshMe, toast])
+  }, [nav, otpDigits, loginEmail, otpExpiredEffective, pending, pendingToken, refreshMe, toast])
 
   const backToCredentials = useCallback(() => {
+    challengeAbortRef.current?.abort()
     setPhase('credentials')
     setPendingToken(null)
     setOtpExpiresAt(null)
+    setStaticOtpMode(false)
     setOtpDigits(['', '', '', '', '', ''])
   }, [])
 
@@ -150,16 +162,23 @@ export default memo(function LoginPage() {
                   toast.error('Enter your email.')
                   return
                 }
+                challengeAbortRef.current?.abort()
+                const ac = new AbortController()
+                challengeAbortRef.current = ac
+                const mySeq = ++challengeSeqRef.current
                 setPending(true)
                 try {
-                  const r = await authOtp.otpLoginChallenge(email, password)
+                  const r = await authOtp.otpLoginChallenge(email, password, { signal: ac.signal })
+                  if (mySeq !== challengeSeqRef.current) return
                   setLoginEmail(email)
                   setPendingToken(r.pendingToken)
                   setOtpExpiresAt(r.expiresAt)
+                  setStaticOtpMode(r.staticOtp === true)
                   setOtpDigits(['', '', '', '', '', ''])
                   setPhase('otp')
-                  toast.success('Code sent. Check your inbox.')
+                  toast.success(r.staticOtp === true ? 'Enter your sign-in code.' : 'Code sent. Check your inbox.')
                 } catch (err: any) {
+                  if (err?.name === 'AbortError' || ac.signal.aborted) return
                   const code = err?.payload?.error
                   if (err?.status === 404 && code === 'no_account') toast.error('Account does not exist.')
                   else if (err?.status === 401 && code === 'invalid_credentials') toast.error('Invalid email or password.')
@@ -172,7 +191,7 @@ export default memo(function LoginPage() {
                   }
                   else toast.error(err?.message || 'Could not sign in.')
                 } finally {
-                  setPending(false)
+                  if (mySeq === challengeSeqRef.current) setPending(false)
                 }
               }}
             >
@@ -227,19 +246,33 @@ export default memo(function LoginPage() {
           {phase === 'otp' && (
             <div style={{ display: 'grid', gap: '1rem' }}>
               <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--muted)' }}>
-                Enter the code sent to <strong>{loginEmail}</strong>
+                {staticOtpMode ? (
+                  <>
+                    Enter your sign-in code for <strong>{loginEmail}</strong>
+                  </>
+                ) : (
+                  <>
+                    Enter the code sent to <strong>{loginEmail}</strong>
+                  </>
+                )}
               </p>
               <div>
                 <label>Enter code</label>
                 <OtpSixBoxes value={otpDigits} onChange={(v) => setOtpDigits(padOtp(v))} disabled={pending} idPrefix="li-otp" />
               </div>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
-                {otpExpired ? 'Code expired.' : `Expires in ${otpRemainingSec}s`}
+                {staticOtpMode ? 'Static sign-in code is active on the server.' : otpExpiredEffective ? 'Code expired.' : `Expires in ${otpRemainingSec}s`}
               </p>
-              <button type="button" className="btn btn-primary" style={{ width: '100%' }} disabled={pending || otpExpired} onClick={() => void verifyOtpLogin()}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                disabled={pending || otpExpiredEffective}
+                onClick={() => void verifyOtpLogin()}
+              >
                 {pending ? 'Verifying…' : 'Verify & sign in'}
               </button>
-              <button type="button" className="btn btn-ghost" style={{ width: '100%' }} disabled={pending || !otpExpired} onClick={() => void resendOtp()}>
+              <button type="button" className="btn btn-ghost" style={{ width: '100%' }} disabled={pending || !otpExpiredEffective} onClick={() => void resendOtp()}>
                 Resend code
               </button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={backToCredentials}>

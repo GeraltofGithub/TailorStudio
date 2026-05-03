@@ -37,7 +37,7 @@ class Api {
     return h
   }
 
-  private async _request<T>(method: HttpMethod, url: string, body?: unknown): Promise<T> {
+  private async _request<T>(method: HttpMethod, url: string, body?: unknown, fetchOpts?: { signal?: AbortSignal }): Promise<T> {
     const hasBody = body !== undefined && body !== null && method !== 'GET'
     const contentType = hasBody ? 'application/json' : ''
     const isWrite = method !== 'GET'
@@ -53,6 +53,7 @@ class Api {
         cache: method === 'GET' ? 'default' : 'no-store',
         headers: this._csrfHeaders(contentType),
         body: hasBody ? JSON.stringify(body) : undefined,
+        signal: fetchOpts?.signal,
       })
 
     let r = await doFetch()
@@ -144,8 +145,8 @@ class Api {
     return this._request<T>('GET', url)
   }
 
-  _post<T = unknown>(url: string, data?: unknown): Promise<T> {
-    return this._request<T>('POST', url, data ?? {})
+  _post<T = unknown>(url: string, data?: unknown, fetchOpts?: { signal?: AbortSignal }): Promise<T> {
+    return this._request<T>('POST', url, data ?? {}, fetchOpts)
   }
 
   _put<T = unknown>(url: string, data?: unknown): Promise<T> {
