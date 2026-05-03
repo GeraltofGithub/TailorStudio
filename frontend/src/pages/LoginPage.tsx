@@ -261,7 +261,7 @@ export default memo(function LoginPage() {
                 <OtpSixBoxes value={otpDigits} onChange={(v) => setOtpDigits(padOtp(v))} disabled={pending} idPrefix="li-otp" />
               </div>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
-                {staticOtpMode ? 'Static sign-in code is active on the server.' : otpExpiredEffective ? 'Code expired.' : `Expires in ${otpRemainingSec}s`}
+                {otpExpiredEffective ? 'Code expired.' : `Expires in ${otpRemainingSec}s`}
               </p>
               <button
                 type="button"
