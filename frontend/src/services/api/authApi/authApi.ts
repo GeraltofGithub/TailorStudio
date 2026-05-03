@@ -3,11 +3,16 @@ import { api } from '../api'
 export type UserRole = 'OWNER' | 'STAFF'
 
 export type MeResponse = {
-  id: number
+  email?: string
   fullName: string
   role: UserRole
   businessId: number
   businessName: string
+  tagline?: string | null
+  address?: string | null
+  phone?: string | null
+  secondaryPhone?: string | null
+  joinCode?: string
 }
 
 class AuthApi {

@@ -42,8 +42,9 @@ class Api {
     const contentType = hasBody ? 'application/json' : ''
     const isWrite = method !== 'GET'
 
-    // Prime CSRF once before the first write, so the very first POST/PUT/PATCH/DELETE never fails.
-    if (isWrite && !this._csrfPrimed) await this._ensureCsrfToken()
+    // Prime CSRF once before the first write (skip public /api/auth/* — CSRF ignored there; /api/me would 401 before login).
+    const authPublicWrite = url.startsWith('/api/auth/')
+    if (isWrite && !this._csrfPrimed && !authPublicWrite) await this._ensureCsrfToken()
 
     const doFetch = async () =>
       fetch(this._joinUrl(url), {

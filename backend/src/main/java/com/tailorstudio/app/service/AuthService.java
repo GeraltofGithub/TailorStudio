@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.util.HexFormat;
+import java.util.Locale;
 
 @Service
 public class AuthService {
@@ -40,7 +41,8 @@ public class AuthService {
             String ownerName,
             String email,
             String rawPassword) {
-        if (userRepository.existsByEmailIgnoreCase(email)) {
+        String em = email.trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsByEmail(em)) {
             throw new IllegalArgumentException("Email already registered");
         }
         Business b = new Business();
@@ -61,7 +63,7 @@ public class AuthService {
         if (u.getMongoObjectId() == null || u.getMongoObjectId().isBlank()) {
             u.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
         }
-        u.setEmail(email.trim().toLowerCase());
+        u.setEmail(em);
         u.setPasswordHash(passwordEncoder.encode(rawPassword));
         u.setFullName(ownerName);
         u.setRole(UserRole.OWNER);
@@ -71,7 +73,8 @@ public class AuthService {
 
     @Transactional
     public void registerStaff(String joinCode, String fullName, String email, String rawPassword) {
-        if (userRepository.existsByEmailIgnoreCase(email)) {
+        String em = email.trim().toLowerCase(Locale.ROOT);
+        if (userRepository.existsByEmail(em)) {
             throw new IllegalArgumentException("Email already registered");
         }
         Business b = businessRepository.findByJoinCode(joinCode.trim())
@@ -81,7 +84,7 @@ public class AuthService {
         if (u.getMongoObjectId() == null || u.getMongoObjectId().isBlank()) {
             u.setMongoObjectId(new org.bson.types.ObjectId().toHexString());
         }
-        u.setEmail(email.trim().toLowerCase());
+        u.setEmail(em);
         u.setPasswordHash(passwordEncoder.encode(rawPassword));
         u.setFullName(fullName);
         u.setRole(UserRole.STAFF);
@@ -96,6 +99,13 @@ public class AuthService {
         b.setJoinCode(generateJoinCode());
         businessRepository.save(b);
         return b.getJoinCode();
+    }
+
+    @Transactional
+    public void updatePasswordForUser(Long userId, String rawPassword) {
+        User u = userRepository.findById(userId).orElseThrow();
+        u.setPasswordHash(passwordEncoder.encode(rawPassword));
+        userRepository.save(u);
     }
 
     private static String generateJoinCode() {

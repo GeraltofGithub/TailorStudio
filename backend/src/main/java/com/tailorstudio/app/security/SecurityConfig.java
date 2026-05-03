@@ -14,8 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfFilter;
@@ -56,32 +56,19 @@ public class SecurityConfig {
                         .csrfTokenRepository(csrfRepo)
                         .csrfTokenRequestHandler(csrfHandler)
                         // Public signup APIs; form POST /login must work even when XSRF-TOKEN cookie is missing on first visit
-                        .ignoringRequestMatchers(
-                                antMatcher("/h2-console/**"),
-                                antMatcher("/api/auth/**"),
-                                antMatcher(HttpMethod.POST, "/login")))
+                        .ignoringRequestMatchers(antMatcher("/h2-console/**"), antMatcher("/api/auth/**")))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/login",
                                 "/api/auth/**",
                                 "/h2-console/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api", "/api/").permitAll()
                         .requestMatchers("/app/**").authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
-                .formLogin(form -> form
-                        .loginPage("/login")
-                        .loginProcessingUrl("/login")
-                        .usernameParameter("username")
-                        .passwordParameter("password")
-                        // React SPA is hosted separately (Vercel). Do not redirect to legacy *.html on the API host.
-                        .successHandler((request, response, authentication) -> response.setStatus(HttpServletResponse.SC_NO_CONTENT))
-                        .failureHandler((request, response, exception) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.getWriter().write("{\"error\":\"unauthorized\"}");
-                        })
-                        .permitAll())
+                // Sign-in is email + password (challenge) then OTP verify only — no password-only session.
+                .formLogin(form -> form.disable())
                 .logout(logout -> logout
                         .logoutRequestMatcher(new AntPathRequestMatcher("/logout", "POST"))
                         // React SPA is hosted separately (Vercel). Do not redirect to legacy static pages on the API host.

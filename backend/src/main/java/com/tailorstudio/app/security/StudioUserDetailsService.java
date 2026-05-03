@@ -7,6 +7,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
+
 @Service
 public class StudioUserDetailsService implements UserDetailsService {
 
@@ -19,8 +21,8 @@ public class StudioUserDetailsService implements UserDetailsService {
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        var user = userRepository.findByEmailIgnoreCase(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        String key = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        var user = userRepository.findByEmail(key).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         return new StudioUserDetails(user);
     }
 }
