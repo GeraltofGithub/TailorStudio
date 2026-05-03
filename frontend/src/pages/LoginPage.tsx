@@ -63,8 +63,13 @@ export default memo(function LoginPage() {
       toast.success('New code sent. Check your inbox.')
     } catch (e: any) {
       if (e?.status === 400) toast.error('Session expired. Sign in again.')
-      else if (e?.status === 503) toast.error('Email is not configured on the server.')
-      else toast.error(e?.message || 'Could not resend code.')
+      else if (e?.status === 503) {
+        if (e?.payload?.error === 'mail_send_failed') {
+          toast.error('Could not send the email. Check EMAIL / EMAIL_PASSWORD on the server.')
+        } else {
+          toast.error('Email is not configured on the server.')
+        }
+      } else toast.error(e?.message || 'Could not resend code.')
     } finally {
       setPending(false)
     }
@@ -158,7 +163,13 @@ export default memo(function LoginPage() {
                   const code = err?.payload?.error
                   if (err?.status === 404 && code === 'no_account') toast.error('Account does not exist.')
                   else if (err?.status === 401 && code === 'invalid_credentials') toast.error('Invalid email or password.')
-                  else if (err?.status === 503) toast.error('Email is not configured on the server.')
+                  else if (err?.status === 503) {
+                    if (err?.payload?.error === 'mail_send_failed') {
+                      toast.error('Could not send the sign-in email. Check EMAIL / EMAIL_PASSWORD on the server.')
+                    } else {
+                      toast.error('Email is not configured on the server.')
+                    }
+                  }
                   else toast.error(err?.message || 'Could not sign in.')
                 } finally {
                   setPending(false)

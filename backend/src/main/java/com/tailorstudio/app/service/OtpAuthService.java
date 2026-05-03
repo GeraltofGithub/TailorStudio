@@ -47,6 +47,7 @@ public class OtpAuthService {
     private final AuthService authService;
     private final PasswordEncoder passwordEncoder;
     private final StudioMailSender studioMailSender;
+    private final UserAuthLookup userAuthLookup;
     private final ApplicationEventPublisher eventPublisher;
     private final String otpPepper;
     private final String brandPublicUrl;
@@ -61,6 +62,7 @@ public class OtpAuthService {
             AuthService authService,
             PasswordEncoder passwordEncoder,
             StudioMailSender studioMailSender,
+            UserAuthLookup userAuthLookup,
             ApplicationEventPublisher eventPublisher,
             @Value("${app.otp.pepper}") String otpPepper,
             @Value("${app.brand.public-url:}") String brandPublicUrl) {
@@ -71,6 +73,7 @@ public class OtpAuthService {
         this.authService = authService;
         this.passwordEncoder = passwordEncoder;
         this.studioMailSender = studioMailSender;
+        this.userAuthLookup = userAuthLookup;
         this.eventPublisher = eventPublisher;
         this.otpPepper = otpPepper;
         this.brandPublicUrl = brandPublicUrl;
@@ -100,14 +103,14 @@ public class OtpAuthService {
     @Transactional
     public LoginChallengeResult startLoginWithPassword(String emailRaw, String passwordRaw) {
         requireMail();
-        String email = normalizeEmail(emailRaw);
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = userAuthLookup.findByEmailFlexible(emailRaw).orElse(null);
         if (user == null) {
             throw new NoSuchUserException();
         }
         if (!passwordEncoder.matches(passwordRaw, user.getPasswordHash())) {
             throw new BadPasswordException();
         }
+        String email = normalizeEmail(user.getEmail());
         pendingLoginRepository.deleteByEmailIgnoreCase(email);
         String pendingTokenPlain = OtpCodeHasher.randomTokenHex(24);
         PendingLogin pl = new PendingLogin();
@@ -150,11 +153,11 @@ public class OtpAuthService {
     @Transactional
     public Instant sendForgotPasswordOtp(String emailRaw) {
         requireMail();
-        String email = normalizeEmail(emailRaw);
-        User user = userRepository.findByEmail(email).orElse(null);
+        User user = userAuthLookup.findByEmailFlexible(emailRaw).orElse(null);
         if (user == null) {
             throw new NoSuchUserException();
         }
+        String email = normalizeEmail(user.getEmail());
         String code = OtpCodeHasher.newSixDigitOtp();
         OtpChallenge c = persistChallenge(email, OtpPurpose.PASSWORD_RESET, code);
         enqueueOtpEmail(
@@ -218,7 +221,7 @@ public class OtpAuthService {
             throw new OtpInvalidException();
         }
         otpChallengeRepository.deleteById(c.getId());
-        User user = userRepository.findByEmail(email).orElseThrow();
+        User user = userAuthLookup.findByEmailFlexible(emailRaw).orElseThrow();
         passwordResetTokenRepository.deleteByUserId(user.getId());
         String token = OtpCodeHasher.randomTokenHex(24);
         PasswordResetToken pr = new PasswordResetToken();
