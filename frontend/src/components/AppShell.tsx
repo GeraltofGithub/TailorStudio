@@ -1,9 +1,10 @@
 import { Suspense, memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation, Navigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom'
 
 import { useAuth } from '../context/AuthContext'
 import { useAppToast } from '../utils/toast'
 import { api } from '../services/api/api'
+import { appService } from '../services/appService'
 import tailorLogo from '../assets/tailor-logo.png'
 
 type NavItem = { href: string; id: string; label: string; icon: string }
@@ -29,10 +30,12 @@ function pageTitleFromPath(pathname: string) {
 export const AppShell = memo(function AppShell() {
   const { state, refreshMe, clearAuth } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const toast = useAppToast()
 
   const title = useMemo(() => pageTitleFromPath(pathname), [pathname])
   const [signingOut, setSigningOut] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -45,6 +48,31 @@ export const AppShell = memo(function AppShell() {
       // ignore
     }
   }, [toast])
+
+  // Prefetch common data right after auth so tab switches feel instant.
+  useEffect(() => {
+    if (state.status !== 'authed') return
+    const run = () => {
+      void appService.dashboard.stats().catch(() => null)
+      void appService.customers.list().catch(() => null)
+      void appService.orders.list().catch(() => null)
+      void appService.team.list().catch(() => null)
+    }
+    // Prefer idle time to avoid blocking first render.
+    const ric = (window as any).requestIdleCallback as ((cb: () => void, opts?: any) => any) | undefined
+    if (ric) {
+      const id = ric(run, { timeout: 1200 })
+      return () => {
+        try {
+          ;(window as any).cancelIdleCallback?.(id)
+        } catch {
+          // ignore
+        }
+      }
+    }
+    const t = window.setTimeout(run, 250)
+    return () => window.clearTimeout(t)
+  }, [state.status])
 
   // Must be declared before any conditional returns (Rules of Hooks).
   const onLogout = useCallback(async () => {
@@ -72,8 +100,8 @@ export const AppShell = memo(function AppShell() {
     clearAuth()
     await refreshMe({ silent: true })
     toast.success('Signed out')
-    window.location.assign('/')
-  }, [clearAuth, refreshMe, signingOut, toast])
+    navigate('/', { replace: true })
+  }, [clearAuth, navigate, refreshMe, signingOut, toast])
 
   if (state.status === 'loading') {
     return (
@@ -91,7 +119,16 @@ export const AppShell = memo(function AppShell() {
 
   return (
     <div className="app-layout">
-      <aside className="sidebar no-print">
+      {/* Mobile sidebar overlay */}
+      <button
+        type="button"
+        className={`ts-sidebar-overlay${mobileSidebarOpen ? ' open' : ''}`}
+        aria-hidden={!mobileSidebarOpen}
+        tabIndex={mobileSidebarOpen ? 0 : -1}
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+
+      <aside className={`sidebar no-print${mobileSidebarOpen ? ' open' : ''}`}>
         <div className="sidebar-brand">
           <img src={tailorLogo} alt="Tailor Studio logo" className="brand-logo" />
           <div>
@@ -102,7 +139,12 @@ export const AppShell = memo(function AppShell() {
 
         <nav className="nav-links">
           {links.map((n) => (
-            <NavLink key={n.id} to={n.href} className={({ isActive }) => (isActive ? 'active' : '')}>
+            <NavLink
+              key={n.id}
+              to={n.href}
+              className={({ isActive }) => (isActive ? 'active' : '')}
+              onClick={() => setMobileSidebarOpen(false)}
+            >
               <span aria-hidden="true">{n.icon}</span> {n.label}
             </NavLink>
           ))}
@@ -125,7 +167,19 @@ export const AppShell = memo(function AppShell() {
         </nav>
 
         <header className="topbar no-print">
-          <h1>{title}</h1>
+          <div className="ts-topbar-left">
+            <button
+              type="button"
+              className="ts-hamburger"
+              aria-label={mobileSidebarOpen ? 'Close menu' : 'Open menu'}
+              onClick={() => setMobileSidebarOpen((v) => !v)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+            <h1>{title}</h1>
+          </div>
           <div className="user-pill">
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{me.fullName}</div>

@@ -1,7 +1,8 @@
-import { createContext, memo, startTransition, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, memo, startTransition, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { MeResponse } from '../services/api/authApi/authApi'
+import { authApi } from '../services/api/authApi/authApi'
 import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import { authService } from '../services/authService'
 
@@ -26,8 +27,11 @@ export function useAuth() {
 
 export const AuthProvider = memo(function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: 'loading', me: null })
+  const refreshGenRef = useRef(0)
 
   const clearAuth = useCallback(() => {
+    refreshGenRef.current += 1
+    authApi.cancelPendingMe()
     resetSessionReadCaches()
     setState({ status: 'anon', me: null })
   }, [])
@@ -36,9 +40,12 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     const silent = !!opts?.silent
     const initialMe = opts?.initialMe
     if (initialMe) {
+      refreshGenRef.current += 1
+      authApi.cancelPendingMe()
       startTransition(() => setState({ status: 'authed', me: initialMe }))
       return true
     }
+    const gen = ++refreshGenRef.current
     if (!silent) {
       setState((prev) => {
         if (prev.status === 'authed') return prev
@@ -47,9 +54,11 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     }
     try {
       const me = await authService.me()
+      if (gen !== refreshGenRef.current) return true
       startTransition(() => setState({ status: 'authed', me }))
       return true
     } catch {
+      if (gen !== refreshGenRef.current) return false
       startTransition(() => setState({ status: 'anon', me: null }))
       return false
     }
@@ -59,10 +68,38 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     void refreshMe()
   }, [refreshMe])
 
+  // Multi-device session takeover: when the user logs in elsewhere, our epoch filter will
+  // start returning 401. Poll /api/me silently so the UI logs out quickly without needing refresh.
+  useEffect(() => {
+    if (state.status !== 'authed') return
+
+    const tick = () => {
+      void refreshMe({ silent: true })
+    }
+
+    const onFocus = () => tick()
+    const onVis = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
+
+    // Keep it light but responsive. (You can tune this later.)
+    const t = window.setInterval(tick, 6000)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+      window.clearInterval(t)
+    }
+  }, [refreshMe, state.status])
+
   // If any API call returns 401, our API client dispatches 'auth:logout'.
   // Listen once and immediately clear local auth so AppShell redirects to /login.
   useEffect(() => {
     const onLogout = () => {
+      refreshGenRef.current += 1
+      authApi.cancelPendingMe()
       resetSessionReadCaches()
       setState({ status: 'anon', me: null })
     }

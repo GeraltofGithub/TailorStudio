@@ -13,6 +13,7 @@ import com.tailorstudio.app.repo.PasswordResetTokenRepository;
 import com.tailorstudio.app.repo.PendingLoginRepository;
 import com.tailorstudio.app.repo.UserRepository;
 import com.tailorstudio.app.security.OtpCodeHasher;
+import com.tailorstudio.app.security.SessionEpochEnforcementFilter;
 import com.tailorstudio.app.security.StudioUserDetails;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,7 @@ public class OtpAuthService {
     private final StudioMailSender studioMailSender;
     private final UserAuthLookup userAuthLookup;
     private final ApplicationEventPublisher eventPublisher;
+    private final UserSessionEpochService userSessionEpochService;
     private final String otpPepper;
     private final String brandPublicUrl;
     private final boolean staticOtpEnabledRaw;
@@ -75,6 +77,7 @@ public class OtpAuthService {
             StudioMailSender studioMailSender,
             UserAuthLookup userAuthLookup,
             ApplicationEventPublisher eventPublisher,
+            UserSessionEpochService userSessionEpochService,
             @Value("${app.otp.pepper}") String otpPepper,
             @Value("${app.brand.public-url:}") String brandPublicUrl,
             @Value("${app.otp.static-enabled:false}") boolean staticOtpEnabledRaw,
@@ -88,6 +91,7 @@ public class OtpAuthService {
         this.studioMailSender = studioMailSender;
         this.userAuthLookup = userAuthLookup;
         this.eventPublisher = eventPublisher;
+        this.userSessionEpochService = userSessionEpochService;
         this.otpPepper = otpPepper;
         this.brandPublicUrl = brandPublicUrl;
         this.staticOtpEnabledRaw = staticOtpEnabledRaw;
@@ -332,12 +336,15 @@ public class OtpAuthService {
     }
 
     private void establishSession(User user, HttpServletRequest request, HttpServletResponse response) {
+        long epoch = userSessionEpochService.bumpEpoch(user.getId());
         HttpSession old = request.getSession(false);
         if (old != null) {
             old.invalidate();
         }
         HttpSession session = request.getSession(true);
-        StudioUserDetails details = new StudioUserDetails(user);
+        session.setAttribute(SessionEpochEnforcementFilter.SESSION_EPOCH_ATTR, epoch);
+        User refreshed = userRepository.findById(user.getId()).orElse(user);
+        StudioUserDetails details = new StudioUserDetails(refreshed);
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);

@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { fetchBootHealth, fetchBootWelcome } from '../services/bootWake'
+import { apiUrl } from '../utils/apiOrigin'
 import { SEW_BOOT_TOTAL_MS } from './sewBootAnimator'
 import { BootSplash, type BootWakePhase } from './BootSplash'
 
@@ -23,6 +25,7 @@ function prefersReducedMotion(): boolean {
 }
 
 export const BootGate = memo(function BootGate({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
   const [bootStage, setBootStage] = useState<'canvas' | 'brand'>('canvas')
   const [phase, setPhase] = useState<'boot' | 'exit' | 'done'>('boot')
   const [wakePhase, setWakePhase] = useState<BootWakePhase>('starting')
@@ -32,11 +35,39 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
   const acRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    // Never show boot canvas inside the authenticated app shell.
+    // `/app/*` refresh should be instant and not replay the splash screen.
+    if (pathname.startsWith('/app')) {
+      setPhase('done')
+      return
+    }
+
     let cancelled = false
     const ac = new AbortController()
     acRef.current = ac
 
     const canvasMs = SEW_BOOT_TOTAL_MS * (sewLowMotion ? CANVAS_LOOPS_REDUCED : CANVAS_LOOPS_NORMAL)
+
+    // Already signed in (e.g. F5 on /app): skip sewing splash — cold wake only for anonymous visitors.
+    void (async () => {
+      try {
+        const me = await fetch(apiUrl('/api/me'), {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+          signal: ac.signal,
+        })
+        if (cancelled || ac.signal.aborted) return
+        if (me.ok) {
+          cancelled = true
+          ac.abort()
+          setPhase('done')
+          return
+        }
+      } catch {
+        // continue with full boot
+      }
+    })()
 
     // Wake backend immediately — do not wait for canvas timer (health → welcome while animation runs).
     void (async () => {
@@ -72,7 +103,7 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
       ac.abort()
       acRef.current = null
     }
-  }, [sewLowMotion])
+  }, [pathname, sewLowMotion])
 
   useEffect(() => {
     if (phase !== 'done') return

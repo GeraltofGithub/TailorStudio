@@ -73,7 +73,10 @@ class Api {
     }
 
     if (r.status === 401) {
-      window.dispatchEvent(new CustomEvent('auth:logout'))
+      const path = url.split('?')[0]
+      if (!path.startsWith('/api/auth/')) {
+        window.dispatchEvent(new CustomEvent('auth:logout'))
+      }
     }
 
     if (!r.ok) {
@@ -135,14 +138,17 @@ class Api {
     }
 
     if (r.status === 401) {
-      window.dispatchEvent(new CustomEvent('auth:logout'))
+      const path = url.split('?')[0]
+      if (!path.startsWith('/api/auth/')) {
+        window.dispatchEvent(new CustomEvent('auth:logout'))
+      }
     }
 
     return r
   }
 
-  _get<T = unknown>(url: string): Promise<T> {
-    return this._request<T>('GET', url)
+  _get<T = unknown>(url: string, fetchOpts?: { signal?: AbortSignal }): Promise<T> {
+    return this._request<T>('GET', url, undefined, fetchOpts)
   }
 
   _post<T = unknown>(url: string, data?: unknown, fetchOpts?: { signal?: AbortSignal }): Promise<T> {

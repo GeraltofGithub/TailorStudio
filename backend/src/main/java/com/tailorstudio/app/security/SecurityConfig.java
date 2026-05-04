@@ -15,7 +15,9 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.HttpMethod;
+import com.tailorstudio.app.repo.UserRepository;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfFilter;
@@ -38,7 +40,16 @@ public class SecurityConfig {
     private boolean cookieSecure;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource) throws Exception {
+    public SessionEpochEnforcementFilter sessionEpochEnforcementFilter(UserRepository userRepository) {
+        return new SessionEpochEnforcementFilter(userRepository);
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(
+            HttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource,
+            SessionEpochEnforcementFilter sessionEpochEnforcementFilter)
+            throws Exception {
         CookieCsrfTokenRepository csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfRepo.setCookiePath("/");
         csrfRepo.setCookieCustomizer(c -> c
@@ -114,6 +125,7 @@ public class SecurityConfig {
 
         // Expose CSRF token via response header for cross-origin SPAs (Vercel + Render).
         http.addFilterAfter(new CsrfHeaderFilter(), CsrfFilter.class);
+        http.addFilterAfter(sessionEpochEnforcementFilter, SecurityContextHolderFilter.class);
 
         return http.build();
     }

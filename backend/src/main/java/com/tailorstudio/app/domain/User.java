@@ -36,6 +36,9 @@ public class User {
 
     private String inviteNote;
 
+    /** Bumped on each successful login; sessions with a stale epoch are invalidated (single active login per account). */
+    private Long sessionEpoch;
+
     public Long getId() {
         return id;
     }
@@ -123,5 +126,13 @@ public class User {
 
     public void setInviteNote(String inviteNote) {
         this.inviteNote = inviteNote;
+    }
+
+    public Long getSessionEpoch() {
+        return sessionEpoch;
+    }
+
+    public void setSessionEpoch(Long sessionEpoch) {
+        this.sessionEpoch = sessionEpoch;
     }
 }

@@ -24,14 +24,28 @@ class AuthApi {
 
   /** Coalesce overlapping GET /api/me (e.g. StrictMode, rapid refresh). */
   private _meInflight: Promise<MeResponse> | null = null
+  private _meAbort: AbortController | null = null
 
   me() {
     if (!this._meInflight) {
-      this._meInflight = api._get<MeResponse>(this._url.ME).finally(() => {
-        this._meInflight = null
-      })
+      this._meAbort?.abort()
+      const ac = new AbortController()
+      this._meAbort = ac
+      this._meInflight = api
+        ._get<MeResponse>(this._url.ME, { signal: ac.signal })
+        .finally(() => {
+          this._meInflight = null
+          this._meAbort = null
+        })
     }
     return this._meInflight
+  }
+
+  /** Drop an in-flight /api/me (e.g. login just completed with initialMe). */
+  cancelPendingMe() {
+    this._meAbort?.abort()
+    this._meInflight = null
+    this._meAbort = null
   }
 
   signup(data: {
