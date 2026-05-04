@@ -35,9 +35,15 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
   const acRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
-    // Never show boot canvas inside the authenticated app shell.
-    // `/app/*` refresh should be instant and not replay the splash screen.
-    if (pathname.startsWith('/app')) {
+    // Never show boot canvas inside the authenticated app shell or auth routes.
+    // `/app/*` and `/login` should be instant and not replay the splash screen.
+    if (
+      pathname.startsWith('/app') ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/signup') ||
+      pathname.startsWith('/join') ||
+      pathname.startsWith('/forgot-password')
+    ) {
       setPhase('done')
       return
     }
