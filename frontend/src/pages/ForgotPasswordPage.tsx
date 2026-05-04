@@ -6,6 +6,7 @@ import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import * as authOtp from '../services/api/authOtpApi/authOtpApi'
 import tailorLogo from '../assets/tailor-logo.png'
+import { formatOtpCountdown } from '../utils/formatOtpCountdown'
 
 function padOtp(v: string[]) {
   const a = [...v]
@@ -36,12 +37,16 @@ export default memo(function ForgotPasswordPage() {
 
   const expired = useMemo(() => {
     if (!expiresAt) return true
-    return Date.now() >= new Date(expiresAt).getTime()
+    const t = new Date(expiresAt).getTime()
+    if (Number.isNaN(t)) return false
+    return Date.now() >= t
   }, [expiresAt, now])
 
   const remainingSec = useMemo(() => {
     if (!expiresAt) return 0
-    return Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000))
+    const t = new Date(expiresAt).getTime()
+    if (Number.isNaN(t)) return 0
+    return Math.max(0, Math.ceil((t - Date.now()) / 1000))
   }, [expiresAt, now])
 
   const sendForgot = useCallback(async () => {
@@ -167,7 +172,7 @@ export default memo(function ForgotPasswordPage() {
                 <OtpSixBoxes value={otp} onChange={(v) => setOtp(padOtp(v))} disabled={pending} idPrefix="fp-otp" />
               </div>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
-                {expired ? 'Code expired.' : `Expires in ${remainingSec}s`}
+                {expired ? 'Code expired.' : `Expires in ${formatOtpCountdown(remainingSec)}`}
               </p>
               <button type="button" className="btn btn-primary" style={{ width: '100%' }} disabled={pending || expired} onClick={() => void verifyOtp()}>
                 {pending ? 'Verifying…' : 'Verify OTP'}

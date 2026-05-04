@@ -17,9 +17,15 @@ public class StudioMailSender {
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final String mailFrom;
 
-    public StudioMailSender(ObjectProvider<JavaMailSender> mailSenderProvider, @Value("${spring.mail.username:}") String mailFrom) {
+    public StudioMailSender(
+            ObjectProvider<JavaMailSender> mailSenderProvider,
+            @Value("${spring.mail.username:}") String mailUsername,
+            @Value("${app.mail.from:}") String mailFromOverride) {
         this.mailSenderProvider = mailSenderProvider;
-        this.mailFrom = mailFrom;
+        this.mailFrom =
+                StringUtils.hasText(mailFromOverride)
+                        ? mailFromOverride.strip()
+                        : (mailUsername != null ? mailUsername.strip() : "");
     }
 
     public boolean isConfigured() {

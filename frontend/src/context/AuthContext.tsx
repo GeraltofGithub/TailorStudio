@@ -36,11 +36,15 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     const silent = !!opts?.silent
     const initialMe = opts?.initialMe
     if (initialMe) {
-      if (!silent) setState({ status: 'loading', me: null })
-      setState({ status: 'authed', me: initialMe })
+      startTransition(() => setState({ status: 'authed', me: initialMe }))
       return true
     }
-    if (!silent) setState({ status: 'loading', me: null })
+    if (!silent) {
+      setState((prev) => {
+        if (prev.status === 'authed') return prev
+        return { status: 'loading', me: null }
+      })
+    }
     try {
       const me = await authService.me()
       startTransition(() => setState({ status: 'authed', me }))

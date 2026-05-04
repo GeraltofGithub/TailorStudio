@@ -12,14 +12,15 @@ const SignupPage = lazy(() => import('./pages/SignupPage'))
 const JoinPage = lazy(() => import('./pages/JoinPage'))
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 
-const DashboardPage = lazy(() => import('./pages/app/DashboardPage'))
-const CustomersPage = lazy(() => import('./pages/app/CustomersPage'))
+import DashboardPage from './pages/app/DashboardPage'
+import CustomersPage from './pages/app/CustomersPage'
+import OrdersPage from './pages/app/OrdersPage'
+import PaymentsPage from './pages/app/PaymentsPage'
+import TeamPage from './pages/app/TeamPage'
+import SettingsPage from './pages/app/SettingsPage'
+
 const CustomerPage = lazy(() => import('./pages/app/CustomerPage'))
-const OrdersPage = lazy(() => import('./pages/app/OrdersPage'))
 const OrderPage = lazy(() => import('./pages/app/OrderPage'))
-const PaymentsPage = lazy(() => import('./pages/app/PaymentsPage'))
-const TeamPage = lazy(() => import('./pages/app/TeamPage'))
-const SettingsPage = lazy(() => import('./pages/app/SettingsPage'))
 const PhonePeReturnPage = lazy(() => import('./pages/app/PhonePeReturnPage'))
 
 function App() {

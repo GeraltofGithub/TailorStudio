@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import * as authOtp from '../services/api/authOtpApi/authOtpApi'
 import tailorLogo from '../assets/tailor-logo.png'
+import { formatOtpCountdown } from '../utils/formatOtpCountdown'
 
 function padOtp(v: string[]) {
   const a = [...v]
@@ -261,7 +262,7 @@ export default memo(function LoginPage() {
                 <OtpSixBoxes value={otpDigits} onChange={(v) => setOtpDigits(padOtp(v))} disabled={pending} idPrefix="li-otp" />
               </div>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
-                {otpExpiredEffective ? 'Code expired.' : `Expires in ${otpRemainingSec}s`}
+                {otpExpiredEffective ? 'Code expired.' : `Expires in ${formatOtpCountdown(otpRemainingSec)}`}
               </p>
               <button
                 type="button"

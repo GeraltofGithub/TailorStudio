@@ -37,6 +37,8 @@ public class MailStartupDiagnostics {
         String host = environment.getProperty("MAIL_HOST", environment.getProperty("spring.mail.host", ""));
         String port = environment.getProperty("MAIL_PORT", environment.getProperty("spring.mail.port", ""));
         boolean ssl = Boolean.parseBoolean(environment.getProperty("MAIL_SMTP_SSL", "false"));
+        boolean startTls = Boolean.parseBoolean(environment.getProperty("MAIL_USE_STARTTLS", "false"));
+        String fromOverride = environment.getProperty("MAIL_FROM", environment.getProperty("app.mail.from", ""));
         int effectivePort = -1;
         String effectiveHost = host;
         if (mailSender.getIfAvailable() instanceof JavaMailSenderImpl impl) {
@@ -46,12 +48,14 @@ public class MailStartupDiagnostics {
             }
         }
         log.info(
-                "SMTP: JavaMailSender bean={}, host={}, spring.mail.port={}, effectivePort={}, MAIL_SMTP_SSL={}, EMAIL len={}, EMAIL_PASSWORD set={}",
+                "SMTP: JavaMailSender bean={}, host={}, spring.mail.port={}, effectivePort={}, MAIL_SMTP_SSL={}, MAIL_USE_STARTTLS={}, MAIL_FROM len={}, EMAIL len={}, EMAIL_PASSWORD set={}",
                 beanPresent,
                 effectiveHost,
                 port,
                 effectivePort,
                 ssl,
+                startTls,
+                StringUtils.hasText(fromOverride) ? fromOverride.length() : 0,
                 userLen,
                 passSet);
     }

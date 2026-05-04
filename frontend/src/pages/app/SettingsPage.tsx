@@ -28,7 +28,7 @@ export default memo(function SettingsPage() {
       try {
         await appService.business.update(body)
         toast.success('Saved')
-        await refreshMe()
+        await refreshMe({ silent: true })
       } catch {
         toast.error('Could not save. Please try again.')
       } finally {

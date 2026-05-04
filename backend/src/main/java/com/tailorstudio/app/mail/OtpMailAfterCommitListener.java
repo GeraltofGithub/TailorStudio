@@ -56,9 +56,9 @@ public class OtpMailAfterCommitListener {
             log.info("OTP email sent to {}", event.to());
         } catch (Exception e) {
             log.error(
-                    "OTP email FAILED to {} — check EMAIL/EMAIL_PASSWORD, Gmail app password, or try MAIL_SMTP_SSL=true and MAIL_PORT=465. Cause: {}",
+                    "OTP email FAILED to {}. If using Brevo: authorize your public IP for SMTP (or disable IP restriction), verify MAIL_FROM, and use only Brevo SMTP login + key in .env.",
                     event.to(),
-                    e.getMessage());
+                    e);
         }
     }
 }

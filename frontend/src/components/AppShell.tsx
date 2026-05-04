@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, Navigate } from 'react-router-dom'
 
 import { useAuth } from '../context/AuthContext'
@@ -70,7 +70,7 @@ export const AppShell = memo(function AppShell() {
 
     // Immediately clear local auth so /app routes require login.
     clearAuth()
-    await refreshMe()
+    await refreshMe({ silent: true })
     toast.success('Signed out')
     window.location.assign('/')
   }, [clearAuth, refreshMe, signingOut, toast])
@@ -167,7 +167,15 @@ export const AppShell = memo(function AppShell() {
         </header>
 
         <div className="page-content">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="panel" style={{ padding: '1.25rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
+                Loading…
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </div>
       </div>
     </div>
