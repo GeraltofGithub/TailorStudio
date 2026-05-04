@@ -7,6 +7,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import * as authOtp from '../services/api/authOtpApi/authOtpApi'
 import tailorLogo from '../assets/tailor-logo.png'
 import { formatOtpCountdown } from '../utils/formatOtpCountdown'
+import { triggerBackendWarmup } from '../services/bootWake'
 
 function padOtp(v: string[]) {
   const a = [...v]
@@ -28,6 +29,10 @@ export default memo(function ForgotPasswordPage() {
   const [showPw, setShowPw] = useState(false)
   const [showPw2, setShowPw2] = useState(false)
   const [pending, setPending] = useState(false)
+
+  useEffect(() => {
+    void triggerBackendWarmup()
+  }, [])
 
   useEffect(() => {
     if (step !== 2 || !expiresAt) return
@@ -58,6 +63,7 @@ export default memo(function ForgotPasswordPage() {
     }
     setPending(true)
     try {
+      await triggerBackendWarmup()
       const r = await authOtp.otpForgotSend(em)
       setExpiresAt(r.expiresAt)
       setOtp(['', '', '', '', '', ''])

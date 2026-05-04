@@ -8,7 +8,9 @@ import { useAuth } from '../context/AuthContext'
 import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import * as authOtp from '../services/api/authOtpApi/authOtpApi'
 import tailorLogo from '../assets/tailor-logo.png'
+import { LoginIntroSequence } from '../components/LoginIntroSequence'
 import { formatOtpCountdown } from '../utils/formatOtpCountdown'
+import { fetchBootHealth, triggerBackendWarmup } from '../services/bootWake'
 
 function padOtp(v: string[]) {
   const a = [...v]
@@ -19,6 +21,7 @@ function padOtp(v: string[]) {
 export default memo(function LoginPage() {
   const [sp] = useSearchParams()
   const showError = sp.get('error') === '1'
+  const skipIntro = showError || sp.get('nointro') === '1'
   const nav = useNavigate()
   const toast = useAppToast()
   const { refreshMe } = useAuth()
@@ -38,11 +41,39 @@ export default memo(function LoginPage() {
   const challengeSeqRef = useRef(0)
   const challengeAbortRef = useRef<AbortController | null>(null)
 
+  const [introPhase, setIntroPhase] = useState<'running' | 'done'>(() => (skipIntro ? 'done' : 'running'))
+  const [introRm] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+
   useEffect(() => {
     if (!showError) return
     toast.error('Invalid credentials')
     nav('/login', { replace: true })
   }, [nav, showError, toast])
+
+  useEffect(() => {
+    if (introPhase !== 'running') return
+    const minMs = introRm ? 650 : 5000
+    let cancelled = false
+    const warm = async () => {
+      await Promise.allSettled([fetchBootHealth(), triggerBackendWarmup()])
+    }
+    void (async () => {
+      await Promise.all([warm(), new Promise<void>((resolve) => window.setTimeout(resolve, minMs))])
+      if (!cancelled) setIntroPhase('done')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [introPhase, introRm])
+
+  useEffect(() => {
+    if (introPhase !== 'done') return
+    if (!skipIntro) return
+    void fetchBootHealth()
+    void triggerBackendWarmup()
+  }, [introPhase, skipIntro])
 
   useEffect(() => {
     if (phase !== 'otp' || !otpExpiresAt) return
@@ -101,6 +132,7 @@ export default memo(function LoginPage() {
     }
     setPending(true)
     try {
+      await triggerBackendWarmup()
       const me = await authOtp.otpLoginVerify(loginEmail.trim(), code, pendingToken)
       const ok = await refreshMe({ silent: true, initialMe: me })
       if (!ok) {
@@ -145,7 +177,10 @@ export default memo(function LoginPage() {
         </nav>
       </header>
       <div className="auth-page">
-        <div className="auth-card">
+        {introPhase === 'running' ? (
+          <LoginIntroSequence reducedMotion={introRm} onSkip={() => setIntroPhase('done')} />
+        ) : null}
+        <div className="auth-card" style={{ display: introPhase === 'running' ? 'none' : undefined }}>
           <h1>Welcome back</h1>
           <p className="sub">Sign in to your tailor workspace.</p>
           <div id="login-err" className="alert alert-error" style={{ display: showError ? 'block' : 'none' }}>
@@ -170,6 +205,7 @@ export default memo(function LoginPage() {
                 const mySeq = ++challengeSeqRef.current
                 setPending(true)
                 try {
+                  await triggerBackendWarmup(ac.signal)
                   const r = await authOtp.otpLoginChallenge(email, password, { signal: ac.signal })
                   if (mySeq !== challengeSeqRef.current) return
                   setLoginEmail(email)

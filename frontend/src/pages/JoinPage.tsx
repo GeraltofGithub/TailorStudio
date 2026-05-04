@@ -1,8 +1,9 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { authService } from '../services/authService'
 import tailorLogo from '../assets/tailor-logo.png'
+import { triggerBackendWarmup } from '../services/bootWake'
 
 type Msg = { kind: 'success' | 'error'; text: string } | null
 
@@ -20,11 +21,17 @@ export default memo(function JoinPage() {
   const [pending, setPending] = useState(false)
   const nav = useNavigate()
 
+  useEffect(() => {
+    void triggerBackendWarmup()
+  }, [])
+
   const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (pending) return
     setPending(true)
     setMsg(null)
+
+    await triggerBackendWarmup()
 
     const fd = new FormData(e.currentTarget)
     const body = {

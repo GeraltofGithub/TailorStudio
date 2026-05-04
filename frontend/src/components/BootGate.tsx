@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 
-import { fetchBootHealth, fetchBootWelcome } from '../services/bootWake'
+import { fetchBootHealth, fetchBootWarmup, fetchBootWelcome } from '../services/bootWake'
 import { apiUrl } from '../utils/apiOrigin'
 import { SEW_BOOT_TOTAL_MS } from './sewBootAnimator'
 import { BootSplash, type BootWakePhase } from './BootSplash'
@@ -32,7 +32,7 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
   const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null)
   const [welcomeTagline, setWelcomeTagline] = useState<string | null>(null)
   const [sewLowMotion] = useState(() => prefersReducedMotion())
-  const acRef = useRef<AbortController | null>(null)
+  const skipMeAcRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     // Never show boot canvas inside the authenticated app shell or auth routes.
@@ -49,8 +49,8 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
     }
 
     let cancelled = false
-    const ac = new AbortController()
-    acRef.current = ac
+    const skipMeAc = new AbortController()
+    skipMeAcRef.current = skipMeAc
 
     const canvasMs = SEW_BOOT_TOTAL_MS * (sewLowMotion ? CANVAS_LOOPS_REDUCED : CANVAS_LOOPS_NORMAL)
 
@@ -61,12 +61,11 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
           method: 'GET',
           credentials: 'include',
           cache: 'no-store',
-          signal: ac.signal,
+          signal: skipMeAc.signal,
         })
-        if (cancelled || ac.signal.aborted) return
+        if (cancelled || skipMeAc.signal.aborted) return
         if (me.ok) {
           cancelled = true
-          ac.abort()
           setPhase('done')
           return
         }
@@ -75,14 +74,17 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
       }
     })()
 
-    // Wake backend immediately — do not wait for canvas timer (health → welcome while animation runs).
+    // Wake backend while the canvas runs. Do NOT tie these to route-transition abort:
+    // if the user clicks "Sign in" mid-sequence, we still want health/warmup/welcome to finish warming Render.
     void (async () => {
       try {
-        await fetchBootHealth(ac.signal)
-        if (cancelled || ac.signal.aborted) return
+        await fetchBootHealth()
+        if (cancelled) return
         setWakePhase('health')
-        const w = await fetchBootWelcome(ac.signal)
-        if (cancelled || ac.signal.aborted) return
+        await fetchBootWarmup()
+        if (cancelled) return
+        const w = await fetchBootWelcome()
+        if (cancelled) return
         setWelcomeMessage(w.message ?? null)
         setWelcomeTagline(w.tagline ?? null)
         setWakePhase('welcome')
@@ -93,21 +95,21 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
 
     void (async () => {
       await delay(canvasMs)
-      if (cancelled || ac.signal.aborted) return
+      if (cancelled) return
       setBootStage('brand')
 
       await delay(MIN_BRAND_MS)
-      if (cancelled || ac.signal.aborted) return
+      if (cancelled) return
       setPhase('exit')
       await delay(EXIT_MS)
-      if (cancelled || ac.signal.aborted) return
+      if (cancelled) return
       setPhase('done')
     })()
 
     return () => {
       cancelled = true
-      ac.abort()
-      acRef.current = null
+      skipMeAc.abort()
+      skipMeAcRef.current = null
     }
   }, [pathname, sewLowMotion])
 

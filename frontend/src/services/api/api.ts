@@ -74,7 +74,8 @@ class Api {
 
     if (r.status === 401) {
       const path = url.split('?')[0]
-      if (!path.startsWith('/api/auth/')) {
+      const isMeProbe = method === 'GET' && path === '/api/me'
+      if (!path.startsWith('/api/auth/') && !isMeProbe) {
         window.dispatchEvent(new CustomEvent('auth:logout'))
       }
     }
@@ -139,7 +140,8 @@ class Api {
 
     if (r.status === 401) {
       const path = url.split('?')[0]
-      if (!path.startsWith('/api/auth/')) {
+      const isMeProbe = path === '/api/me'
+      if (!path.startsWith('/api/auth/') && !isMeProbe) {
         window.dispatchEvent(new CustomEvent('auth:logout'))
       }
     }

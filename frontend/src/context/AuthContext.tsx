@@ -59,6 +59,19 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
       return true
     } catch {
       if (gen !== refreshGenRef.current) return false
+      if (silent) {
+        try {
+          await new Promise<void>((r) => window.setTimeout(r, 550))
+          if (gen !== refreshGenRef.current) return false
+          const me2 = await authService.me()
+          if (gen !== refreshGenRef.current) return true
+          startTransition(() => setState({ status: 'authed', me: me2 }))
+          return true
+        } catch {
+          if (gen !== refreshGenRef.current) return false
+        }
+      }
+      resetSessionReadCaches()
       startTransition(() => setState({ status: 'anon', me: null }))
       return false
     }
@@ -77,19 +90,33 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
       void refreshMe({ silent: true })
     }
 
-    const onFocus = () => tick()
+    let debounceT: ReturnType<typeof setTimeout> | null = null
+    const debouncedTick = () => {
+      if (debounceT) window.clearTimeout(debounceT)
+      debounceT = window.setTimeout(() => {
+        debounceT = null
+        tick()
+      }, 1200)
+    }
+
+    const onFocus = () => debouncedTick()
     const onVis = () => {
-      if (document.visibilityState === 'visible') tick()
+      if (document.visibilityState === 'visible') debouncedTick()
     }
 
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVis)
 
-    // Keep it light but responsive. (You can tune this later.)
-    const t = window.setInterval(tick, 6000)
+    // Delay first poll so it never races the cookie/session right after OTP redirect; then poll lightly.
+    const startDelay = window.setTimeout(() => {
+      tick()
+    }, 8000)
+    const t = window.setInterval(tick, 15000)
     return () => {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVis)
+      if (debounceT) window.clearTimeout(debounceT)
+      window.clearTimeout(startDelay)
       window.clearInterval(t)
     }
   }, [refreshMe, state.status])

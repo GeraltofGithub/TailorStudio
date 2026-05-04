@@ -37,10 +37,25 @@ async function getJson<T>(path: string, parentSignal?: AbortSignal): Promise<T |
   }
 }
 
-/** First request — wakes a cold JVM (e.g. Render). */
+/**
+ * Boot sequence on `/` (see `BootGate`): **`/api/health` → `/api/warmup` → `/api/welcome`**
+ * so the container wakes, Mongo connects, then the SPA gets welcome copy while the canvas runs.
+ */
+/** First request — cheap “container is up” ping (Render wake). */
 export async function fetchBootHealth(signal?: AbortSignal): Promise<boolean> {
   const h = await getJson<{ ok?: boolean }>('/api/health', signal)
   return !!h?.ok
+}
+
+/** Touches Mongo (count) so DB pool + mapping init before auth — use during boot and before sign-in. */
+export async function fetchBootWarmup(signal?: AbortSignal): Promise<boolean> {
+  const w = await getJson<{ ok?: boolean }>('/api/warmup', signal)
+  return !!w?.ok
+}
+
+/** Alias for auth pages — same as {@link fetchBootWarmup}. */
+export async function triggerBackendWarmup(signal?: AbortSignal): Promise<boolean> {
+  return fetchBootWarmup(signal)
 }
 
 /** Second request — welcome copy + extra load while the app is warming. */

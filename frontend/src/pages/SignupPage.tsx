@@ -1,10 +1,12 @@
-import { memo, useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { memo, useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { LoginIntroSequence } from '../components/LoginIntroSequence'
 import { authService } from '../services/authService'
 import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import tailorLogo from '../assets/tailor-logo.png'
+import { fetchBootHealth, triggerBackendWarmup } from '../services/bootWake'
 
 async function signupWithTimeout<T>(p: Promise<T>, timeoutMs = 25000): Promise<T> {
   return await Promise.race([
@@ -16,15 +18,47 @@ async function signupWithTimeout<T>(p: Promise<T>, timeoutMs = 25000): Promise<T
 }
 
 export default memo(function SignupPage() {
+  const [sp] = useSearchParams()
+  const skipIntro = sp.get('nointro') === '1'
   const [pending, setPending] = useState(false)
   const nav = useNavigate()
   const toast = useAppToast()
   const [showPass, setShowPass] = useState(false)
 
+  const [introPhase, setIntroPhase] = useState<'running' | 'done'>(() => (skipIntro ? 'done' : 'running'))
+  const [introRm] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+
+  useEffect(() => {
+    if (introPhase !== 'running') return
+    const minMs = introRm ? 650 : 5000
+    let cancelled = false
+    const warm = async () => {
+      await Promise.allSettled([fetchBootHealth(), triggerBackendWarmup()])
+    }
+    void (async () => {
+      await Promise.all([warm(), new Promise<void>((resolve) => window.setTimeout(resolve, minMs))])
+      if (!cancelled) setIntroPhase('done')
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [introPhase, introRm])
+
+  useEffect(() => {
+    if (introPhase !== 'done') return
+    if (!skipIntro) return
+    void fetchBootHealth()
+    void triggerBackendWarmup()
+  }, [introPhase, skipIntro])
+
   const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (pending) return
     setPending(true)
+
+    await triggerBackendWarmup()
 
     const fd = new FormData(e.currentTarget)
     const body = {
@@ -64,7 +98,10 @@ export default memo(function SignupPage() {
         </nav>
       </header>
       <div className="auth-page">
-        <div className="auth-card" style={{ maxWidth: 520 }}>
+        {introPhase === 'running' ? (
+          <LoginIntroSequence variant="signup" reducedMotion={introRm} onSkip={() => setIntroPhase('done')} />
+        ) : null}
+        <div className="auth-card" style={{ maxWidth: 520, display: introPhase === 'running' ? 'none' : undefined }}>
         <h1>Create your studio</h1>
         <p className="sub">You become the owner. You’ll get a join code to invite staff.</p>
           <form id="f" onSubmit={onSubmit}>

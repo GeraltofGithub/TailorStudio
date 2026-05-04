@@ -49,7 +49,7 @@ export const OtpSixBoxes = memo(function OtpSixBoxes({ value, onChange, disabled
   )
 
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'nowrap' }} onPaste={onPaste}>
+    <div className="ts-otp-row" onPaste={onPaste}>
       {Array.from({ length: 6 }, (_, i) => (
         <input
           key={i}
@@ -66,18 +66,6 @@ export const OtpSixBoxes = memo(function OtpSixBoxes({ value, onChange, disabled
           onChange={(e) => setAt(i, e.target.value)}
           onKeyDown={(e) => onKeyDown(i, e)}
           className="ts-otp-cell"
-          style={{
-            width: '2.5rem',
-            textAlign: 'center',
-            fontSize: '1.25rem',
-            fontWeight: 600,
-            padding: '0.5rem 0',
-            borderRadius: '8px',
-            border: '1px solid #c9ced6',
-            background: '#fff',
-            color: '#000',
-            caretColor: '#000',
-          }}
         />
       ))}
     </div>

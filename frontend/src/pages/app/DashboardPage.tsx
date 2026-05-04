@@ -38,17 +38,22 @@ function statusBadgeClass(st: string) {
 export default memo(function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recent, setRecent] = useState<OrderRow[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const [s, orders] = await Promise.all([
-        appService.dashboard.stats(),
-        appService.orders.list() as unknown as Promise<OrderRow[]>,
-      ])
-      if (!alive) return
-      setStats(s)
-      setRecent((orders || []).slice(0, 8))
+      try {
+        const [s, orders] = await Promise.all([
+          appService.dashboard.stats(),
+          appService.orders.list() as unknown as Promise<OrderRow[]>,
+        ])
+        if (!alive) return
+        setStats(s)
+        setRecent((orders || []).slice(0, 8))
+      } finally {
+        if (alive) setLoading(false)
+      }
     })()
     return () => {
       alive = false
@@ -62,15 +67,17 @@ export default memo(function DashboardPage() {
       <div className="grid-metrics">
         <div className="metric">
           <div className="label">Total orders</div>
-          <div className="value">{stats ? stats.totalOrders : '—'}</div>
+          <div className="value">{loading ? <span className="ts-dash-skel-metric" /> : stats ? stats.totalOrders : '—'}</div>
         </div>
         <div className="metric">
           <div className="label">Active (not delivered)</div>
-          <div className="value accent">{stats ? stats.pendingDeliveries : '—'}</div>
+          <div className="value accent">
+            {loading ? <span className="ts-dash-skel-metric" /> : stats ? stats.pendingDeliveries : '—'}
+          </div>
         </div>
         <div className="metric">
           <div className="label">Income today (delivered)</div>
-          <div className="value">{stats ? money(stats.dailyIncome) : '—'}</div>
+          <div className="value">{loading ? <span className="ts-dash-skel-metric" /> : stats ? money(stats.dailyIncome) : '—'}</div>
         </div>
       </div>
 
@@ -94,7 +101,15 @@ export default memo(function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 5 }, (_, i) => (
+                  <tr key={`sk-${i}`} className="ts-dash-skel-row">
+                    <td colSpan={6}>
+                      <div className="ts-dash-skel-bar" />
+                    </td>
+                  </tr>
+                ))
+              ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={6}>No orders yet.</td>
                 </tr>
