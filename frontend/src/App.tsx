@@ -2,6 +2,7 @@ import { Suspense, lazy, memo } from 'react'
 import { Navigate, Route, BrowserRouter, Routes } from 'react-router-dom'
 
 import { AppShell } from './components/AppShell'
+import { BootGate } from './components/BootGate'
 import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
 
@@ -25,32 +26,34 @@ function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AuthProvider>
-          <Suspense fallback={<div className="auth-page">Loading…</div>}>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route path="/join" element={<JoinPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <BootGate>
+          <AuthProvider>
+            <Suspense fallback={<div className="auth-page">Loading…</div>}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/join" element={<JoinPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-              <Route path="/app" element={<AppShell />}>
-                <Route index element={<Navigate to="/app/dashboard" replace />} />
-                <Route path="dashboard" element={<DashboardPage />} />
-                <Route path="customers" element={<CustomersPage />} />
-                <Route path="customer" element={<CustomerPage />} />
-                <Route path="orders" element={<OrdersPage />} />
-                <Route path="order" element={<OrderPage />} />
-                <Route path="payments" element={<PaymentsPage />} />
-                <Route path="team" element={<TeamPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="phonepe-return" element={<PhonePeReturnPage />} />
-              </Route>
+                <Route path="/app" element={<AppShell />}>
+                  <Route index element={<Navigate to="/app/dashboard" replace />} />
+                  <Route path="dashboard" element={<DashboardPage />} />
+                  <Route path="customers" element={<CustomersPage />} />
+                  <Route path="customer" element={<CustomerPage />} />
+                  <Route path="orders" element={<OrdersPage />} />
+                  <Route path="order" element={<OrderPage />} />
+                  <Route path="payments" element={<PaymentsPage />} />
+                  <Route path="team" element={<TeamPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="phonepe-return" element={<PhonePeReturnPage />} />
+                </Route>
 
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </AuthProvider>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </AuthProvider>
+        </BootGate>
       </ToastProvider>
     </BrowserRouter>
   )

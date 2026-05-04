@@ -1,0 +1,403 @@
+/* Boot splash: continuous motion during cold start; GPU-friendly transforms. */
+
+.ts-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: linear-gradient(155deg, #0c1015 0%, #1a2431 42%, #0f1620 100%);
+  color: #e8ecf1;
+  font-family: var(--font, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  overflow: hidden;
+}
+
+.ts-boot--canvas {
+  gap: 1rem;
+}
+
+.ts-boot__canvas-wrap {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 720px;
+}
+
+.ts-boot__sew-canvas {
+  display: block;
+  flex: 0 0 auto;
+  width: min(100%, 680px);
+  height: auto;
+  aspect-ratio: 680 / 420;
+  min-height: 200px;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  background: rgba(12, 16, 21, 0.35);
+}
+
+.ts-boot__canvas-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #8fa3b5;
+  text-align: center;
+  letter-spacing: 0.02em;
+  animation: ts-boot-hint-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes ts-boot-hint-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.ts-boot__grain {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.ts-boot__bg-sheen {
+  pointer-events: none;
+  position: absolute;
+  inset: -40%;
+  z-index: 0;
+  background: radial-gradient(ellipse 50% 35% at 50% 120%, rgba(126, 184, 218, 0.12), transparent 70%);
+  animation: ts-boot-sheen 5.5s ease-in-out infinite;
+}
+
+@keyframes ts-boot-sheen {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(-6%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(6%) scale(1.04);
+  }
+}
+
+.ts-boot__logo-shell {
+  position: relative;
+  width: 8.5rem;
+  height: 8.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ts-boot-shell-float 3.4s ease-in-out infinite;
+}
+
+@keyframes ts-boot-shell-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+.ts-boot__orbit {
+  position: absolute;
+  width: 7.25rem;
+  height: 7.25rem;
+  border-radius: 50%;
+  border: 1px solid rgba(126, 184, 218, 0.22);
+  border-top-color: rgba(200, 224, 240, 0.75);
+  border-right-color: rgba(126, 184, 218, 0.15);
+  animation: ts-boot-spin 4.8s linear infinite;
+}
+
+.ts-boot__orbit--slow {
+  width: 8.25rem;
+  height: 8.25rem;
+  border-top-color: rgba(126, 184, 218, 0.35);
+  animation-duration: 7.2s;
+  animation-direction: reverse;
+  opacity: 0.65;
+}
+
+@keyframes ts-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ts-boot__logo-wrap {
+  position: relative;
+  width: 5.5rem;
+  height: 5.5rem;
+  animation: ts-boot-logo-tilt 2.8s ease-in-out infinite;
+}
+
+@keyframes ts-boot-logo-tilt {
+  0%,
+  100% {
+    transform: rotate(-3deg) scale(1);
+  }
+  50% {
+    transform: rotate(3deg) scale(1.04);
+  }
+}
+
+.ts-boot__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 28px rgba(0, 0, 0, 0.5));
+  animation: ts-boot-logo-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both, ts-boot-logo-glow 2.2s ease-in-out 0.55s infinite;
+}
+
+@keyframes ts-boot-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ts-boot-logo-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 4px 22px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 0 rgba(126, 184, 218, 0));
+  }
+  50% {
+    filter: drop-shadow(0 4px 28px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 22px rgba(126, 184, 218, 0.35));
+  }
+}
+
+.ts-boot__thread {
+  position: absolute;
+  left: 50%;
+  bottom: -0.35rem;
+  width: 8rem;
+  height: 2.5rem;
+  margin-left: -4rem;
+  overflow: visible;
+}
+
+.ts-boot__thread--ghost {
+  opacity: 0.45;
+  margin-left: -4.2rem;
+  bottom: -0.55rem;
+  animation: ts-boot-thread-offset 1.6s ease-in-out infinite;
+}
+
+@keyframes ts-boot-thread-offset {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+}
+
+.ts-boot__thread path {
+  fill: none;
+  stroke: #8ec8e8;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 140;
+  stroke-dashoffset: 140;
+  animation: ts-boot-thread 1.8s ease-in-out infinite;
+}
+
+.ts-boot__thread--ghost path {
+  stroke: #5a8cad;
+  stroke-width: 1.6;
+  animation-duration: 2.4s;
+  animation-delay: -0.6s;
+}
+
+@keyframes ts-boot-thread {
+  0% {
+    stroke-dashoffset: 140;
+    opacity: 0.45;
+  }
+  40% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -140;
+    opacity: 0.45;
+  }
+}
+
+.ts-boot__needle {
+  position: absolute;
+  right: 0.15rem;
+  top: 0.1rem;
+  width: 0.38rem;
+  height: 1.15rem;
+  background: linear-gradient(180deg, #e2ecf5, #7a8fa3);
+  border-radius: 1px;
+  transform-origin: 50% 100%;
+  animation: ts-boot-needle 0.85s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
+}
+
+@keyframes ts-boot-needle {
+  0%,
+  100% {
+    transform: rotate(-14deg);
+  }
+  50% {
+    transform: rotate(16deg);
+  }
+}
+
+.ts-boot__text {
+  text-align: center;
+  max-width: 22rem;
+  animation: ts-boot-fade-up 0.55s 0.08s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ts-boot-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Solid text + soft glow — avoid background-clip:text + gradient (shows as a full-width bar when clip fails). */
+.ts-boot__title {
+  margin: 0;
+  font-size: 1.38rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #eef4f8;
+  animation: ts-boot-title-soft 2.6s ease-in-out infinite;
+}
+
+@keyframes ts-boot-title-soft {
+  0%,
+  100% {
+    color: #e2ebf3;
+    text-shadow: 0 0 0 rgba(158, 196, 223, 0);
+  }
+  50% {
+    color: #fbfdff;
+    text-shadow: 0 0 20px rgba(158, 196, 223, 0.4);
+  }
+}
+
+.ts-boot__tagline {
+  margin: 0.55rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #9aa8b8;
+  opacity: 0.55;
+  transform: translateY(4px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.ts-boot__tagline--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ts-boot__status {
+  margin: 0.65rem 0 0;
+  font-size: 0.8rem;
+  color: #7d8fa3;
+  letter-spacing: 0.02em;
+  min-height: 1.25em;
+  transition: color 0.3s ease;
+}
+
+.ts-boot__dots {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+.ts-boot__dots span {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: #7eb8da;
+  opacity: 0.35;
+  animation: ts-boot-dot 1.05s ease-in-out infinite;
+}
+
+.ts-boot__dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.ts-boot__dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes ts-boot-dot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+.ts-boot--exit {
+  animation: ts-boot-exit 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes ts-boot-exit {
+  to {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-boot__canvas-hint {
+    animation: none;
+  }
+  .ts-boot__bg-sheen,
+  .ts-boot__logo-shell,
+  .ts-boot__orbit,
+  .ts-boot__logo-wrap,
+  .ts-boot__logo,
+  .ts-boot__thread path,
+  .ts-boot__thread--ghost,
+  .ts-boot__needle,
+  .ts-boot__title,
+  .ts-boot__dots span {
+    animation: none !important;
+  }
+  .ts-boot__title {
+    color: #eef4f8;
+    text-shadow: none;
+  }
+  .ts-boot__thread path {
+    stroke-dashoffset: 0;
+    opacity: 0.85;
+  }
+}

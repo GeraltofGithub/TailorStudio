@@ -22,8 +22,16 @@ class AuthApi {
     STAFF_SIGNUP: '/api/auth/staff-signup',
   } as const
 
+  /** Coalesce overlapping GET /api/me (e.g. StrictMode, rapid refresh). */
+  private _meInflight: Promise<MeResponse> | null = null
+
   me() {
-    return api._get<MeResponse>(this._url.ME)
+    if (!this._meInflight) {
+      this._meInflight = api._get<MeResponse>(this._url.ME).finally(() => {
+        this._meInflight = null
+      })
+    }
+    return this._meInflight
   }
 
   signup(data: {

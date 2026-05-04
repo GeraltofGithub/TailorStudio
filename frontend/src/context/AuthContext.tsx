@@ -1,4 +1,4 @@
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, memo, startTransition, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { MeResponse } from '../services/api/authApi/authApi'
@@ -43,10 +43,10 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     if (!silent) setState({ status: 'loading', me: null })
     try {
       const me = await authService.me()
-      setState({ status: 'authed', me })
+      startTransition(() => setState({ status: 'authed', me }))
       return true
     } catch {
-      setState({ status: 'anon', me: null })
+      startTransition(() => setState({ status: 'anon', me: null }))
       return false
     }
   }, [])
