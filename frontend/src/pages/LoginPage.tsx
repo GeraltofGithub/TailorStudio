@@ -26,6 +26,8 @@ export default memo(function LoginPage() {
   const [pending, setPending] = useState(false)
 
   const [phase, setPhase] = useState<'credentials' | 'otp'>('credentials')
+  const [emailInput, setEmailInput] = useState('')
+  const [passwordInput, setPasswordInput] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
   const [pendingToken, setPendingToken] = useState<string | null>(null)
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null)
@@ -156,9 +158,8 @@ export default memo(function LoginPage() {
               onSubmit={async (e) => {
                 e.preventDefault()
                 if (pending) return
-                const fd = new FormData(e.currentTarget)
-                const email = String(fd.get('email') || '').trim()
-                const password = String(fd.get('password') || '')
+                const email = emailInput.trim()
+                const password = passwordInput
                 if (!email) {
                   toast.error('Enter your email.')
                   return
@@ -172,6 +173,7 @@ export default memo(function LoginPage() {
                   const r = await authOtp.otpLoginChallenge(email, password, { signal: ac.signal })
                   if (mySeq !== challengeSeqRef.current) return
                   setLoginEmail(email)
+                  setPasswordInput('')
                   setPendingToken(r.pendingToken)
                   setOtpExpiresAt(r.expiresAt)
                   setStaticOtpMode(r.staticOtp === true)
@@ -199,7 +201,15 @@ export default memo(function LoginPage() {
               <fieldset disabled={pending} style={{ border: 'none', margin: 0, padding: 0, display: 'grid', gap: '1rem' }}>
                 <div>
                   <label htmlFor="email">Email</label>
-                  <input type="email" id="email" name="email" autoComplete="username" required />
+                  <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    autoComplete="username"
+                    required
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                  />
                 </div>
                 <div>
                   <label htmlFor="password">Password</label>
@@ -211,6 +221,8 @@ export default memo(function LoginPage() {
                       autoComplete="current-password"
                       required
                       style={{ paddingRight: '2.4rem' }}
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
                     />
                     <button
                       type="button"
