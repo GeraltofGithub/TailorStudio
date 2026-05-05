@@ -674,5 +674,106 @@ export function drawSewBootFrame(ctx: CanvasRenderingContext2D, theme: SewTheme,
   drawProgressDots(ctx, theme, ms)
 }
 
+export function drawInfiniteCut(ctx: CanvasRenderingContext2D, theme: SewTheme, ms: number) {
+  ctx.clearRect(0, 0, W, H)
+  const cx = 340
+  const cy = 210
+
+  const lineX1 = cx - 100
+  const lineX2 = cx + 100
+  const lineY = cy
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(lineX1, lineY)
+  ctx.lineTo(lineX2, lineY)
+  ctx.strokeStyle = theme.cut
+  ctx.lineWidth = 2.5
+  ctx.setLineDash([8, 4])
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.restore()
+
+  const scissorX = lerp(lineX1 - 20, lineX2 + 20, 0.5 + 0.5 * Math.sin(ms / 600))
+  const scissorY = lineY
+  const open = 0.5 + 0.5 * Math.sin(ms / 120)
+
+  ctx.save()
+  drawScissors(ctx, theme, scissorX, scissorY, 0, open)
+  ctx.restore()
+}
+
+export function drawInfiniteSew(ctx: CanvasRenderingContext2D, theme: SewTheme, ms: number) {
+  ctx.clearRect(0, 0, W, H)
+  const cx = 340
+  const cy = 200
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.roundRect(cx - 200, cy + 52, 320, 16, 4)
+  ctx.fillStyle = theme.fabric
+  ctx.fill()
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath()
+    ctx.moveTo(cx - 200 + i * 40, cy + 52)
+    ctx.lineTo(cx - 200 + i * 40, cy + 68)
+    ctx.strokeStyle = theme.fabricMid
+    ctx.lineWidth = 1
+    ctx.stroke()
+  }
+  ctx.restore()
+
+  const stitchProgress = 0.5 + 0.5 * Math.sin(ms / 800)
+  const stitchStart = cx - 180
+  const stitchEnd = cx + 80
+  ctx.save()
+  for (let i = 0; i < 30; i++) {
+    const sx = lerp(stitchStart, stitchEnd, i / 30)
+    if (sx > lerp(stitchStart, stitchEnd, stitchProgress)) break
+    if (i % 2 === 0) {
+      ctx.beginPath()
+      ctx.moveTo(sx, cy + 60)
+      ctx.lineTo(sx + 12, cy + 60)
+      ctx.strokeStyle = '#f9fbfc'
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+
+  const nBob = Math.sin(ms / 150) * 18
+  const needleY = nBob > 0 ? nBob : 0
+
+  ctx.save()
+  drawMachine(ctx, theme, cx, cy, ms, needleY)
+  ctx.restore()
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(cx + 75, cy - 110, 22, 38)
+  ctx.fillStyle = theme.threadGold
+  ctx.fill()
+  ctx.beginPath()
+  ctx.rect(cx + 70, cy - 114, 32, 8)
+  ctx.fillStyle = mix(theme.threadGold, '#ffffff', 0.15)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.rect(cx + 70, cy - 76, 32, 8)
+  ctx.fillStyle = mix(theme.threadGold, '#ffffff', 0.15)
+  ctx.fill()
+  ctx.beginPath()
+  ctx.moveTo(cx + 86, cy - 106)
+  ctx.quadraticCurveTo(cx + 20, cy - 120, cx - 60, cy - 80)
+  ctx.quadraticCurveTo(cx - 80, cy - 65, cx - 92, cy - 45)
+  ctx.strokeStyle = theme.threadGoldSoft
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([5, 3])
+  const dashOff = (-(ms / 100)) % 16
+  ctx.lineDashOffset = dashOff
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.restore()
+}
+
 export const SEW_BOOT_CANVAS_CSS_W = W
 export const SEW_BOOT_CANVAS_CSS_H = H

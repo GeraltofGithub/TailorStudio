@@ -1,14 +1,14 @@
 import { memo, useEffect, useRef } from 'react'
 
-import { drawSewBootFrame, SEW_BOOT_CANVAS_CSS_H, SEW_BOOT_CANVAS_CSS_W, SEW_BOOT_TOTAL_MS } from './sewBootAnimator'
+import { drawInfiniteCut, drawInfiniteSew, SEW_BOOT_CANVAS_CSS_H, SEW_BOOT_CANVAS_CSS_W } from './sewBootAnimator'
 import { getSewTheme } from './sewCanvasTheme'
 
 type Props = {
-  /** Fewer redraws when OS requests reduced motion (animation still visible). */
+  mode: 'cut' | 'sew'
   lowMotion?: boolean
 }
 
-export const SewCanvasBoot = memo(function SewCanvasBoot({ lowMotion = false }: Props) {
+export const SewCanvasBoot = memo(function SewCanvasBoot({ mode, lowMotion = false }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -37,8 +37,11 @@ export const SewCanvasBoot = memo(function SewCanvasBoot({ lowMotion = false }: 
       }
       lastDraw = t
       try {
-        const ms = (t - start) % SEW_BOOT_TOTAL_MS
-        drawSewBootFrame(ctx, theme, ms)
+        if (mode === 'cut') {
+          drawInfiniteCut(ctx, theme, t - start)
+        } else {
+          drawInfiniteSew(ctx, theme, t - start)
+        }
       } catch {
         /* ignore single-frame draw errors */
       }
@@ -46,7 +49,7 @@ export const SewCanvasBoot = memo(function SewCanvasBoot({ lowMotion = false }: 
     }
     raf = requestAnimationFrame(frame)
     return () => cancelAnimationFrame(raf)
-  }, [lowMotion])
+  }, [mode, lowMotion])
 
   return (
     <canvas

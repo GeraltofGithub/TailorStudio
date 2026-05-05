@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from 'react'
 import { Check, Lock, User } from 'lucide-react'
+import { fetchBootWarmup } from '../services/bootWake'
 
 import tailorLogo from '../assets/tailor-logo.png'
 
@@ -32,12 +33,21 @@ const CAPTIONS_SIGNUP = [
 export const LoginIntroSequence = memo(function LoginIntroSequence({ reducedMotion, onSkip, variant = 'login' }: Props) {
   const [capIdx, setCapIdx] = useState(0)
   const captions = variant === 'signup' ? CAPTIONS_SIGNUP : CAPTIONS_LOGIN
-  const barMs = reducedMotion ? 750 : 5000
-  const stepMs = reducedMotion ? 190 : 1250
+  const barMs = reducedMotion ? 5000 : 15000
+  const stepMs = reducedMotion ? 2500 : 5000
 
   useEffect(() => {
+    // Send a warmup request to the backend so it spins up from cold start during this animation
+    fetchBootWarmup().catch(() => {})
+
     const t = window.setInterval(() => {
-      setCapIdx((i) => (i + 1) % captions.length)
+      setCapIdx((i) => {
+        if (i >= captions.length - 1) {
+          window.clearInterval(t)
+          return i
+        }
+        return i + 1
+      })
     }, stepMs)
     return () => window.clearInterval(t)
   }, [captions.length, stepMs])
@@ -63,13 +73,13 @@ export const LoginIntroSequence = memo(function LoginIntroSequence({ reducedMoti
         </div>
 
         <div className="ts-login-intro__icons" aria-hidden>
-          <span className="ts-login-intro__icon ts-login-intro__icon--user">
+          <span className={`ts-login-intro__icon ts-login-intro__icon--user ${capIdx === 0 ? 'ts-login-intro__icon--active' : capIdx > 0 ? 'ts-login-intro__icon--done' : ''}`}>
             <User size={22} strokeWidth={2.2} />
           </span>
-          <span className="ts-login-intro__icon ts-login-intro__icon--lock">
+          <span className={`ts-login-intro__icon ts-login-intro__icon--lock ${capIdx === 1 ? 'ts-login-intro__icon--active' : capIdx > 1 ? 'ts-login-intro__icon--done' : ''}`}>
             <Lock size={22} strokeWidth={2.2} />
           </span>
-          <span className="ts-login-intro__icon ts-login-intro__icon--ok">
+          <span className={`ts-login-intro__icon ts-login-intro__icon--ok ${capIdx === 2 ? 'ts-login-intro__icon--active' : capIdx > 2 ? 'ts-login-intro__icon--done' : ''}`}>
             <Check size={22} strokeWidth={2.6} />
           </span>
         </div>
@@ -80,7 +90,7 @@ export const LoginIntroSequence = memo(function LoginIntroSequence({ reducedMoti
           <div className="ts-login-intro__bar" style={{ animationDuration: `${barMs}ms` }} />
         </div>
 
-        <p className="ts-login-intro__fine">This short wait helps after the server has been asleep (e.g. Render free tier).</p>
+        <p className="ts-login-intro__fine">This short wait helps after the server has been asleep.</p>
         {onSkip ? (
           <button type="button" className="btn btn-ghost btn-sm ts-login-intro__skip" onClick={onSkip}>
             {variant === 'signup' ? 'Skip and continue' : 'Skip and sign in now'}
