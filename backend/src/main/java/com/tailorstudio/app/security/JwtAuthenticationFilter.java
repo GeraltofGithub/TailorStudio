@@ -46,20 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 try {
                     Claims claims = jwtService.parseAndVerify(raw);
                     long userId = Long.parseLong(claims.getSubject());
-                    Number epochClaim = claims.get("epoch", Number.class);
-                    if (epochClaim != null) {
-                        long tokenEpoch = epochClaim.longValue();
-                        User user = userRepository.findById(userId).orElse(null);
-                        if (user != null) {
-                            long dbEpoch = user.getSessionEpoch() == null ? 0L : user.getSessionEpoch();
-                            if (tokenEpoch == dbEpoch) {
-                                StudioUserDetails details = new StudioUserDetails(user);
-                                UsernamePasswordAuthenticationToken auth =
-                                        new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
-                                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                                SecurityContextHolder.getContext().setAuthentication(auth);
-                            }
-                        }
+                    User user = userRepository.findById(userId).orElse(null);
+                    if (user != null) {
+                        StudioUserDetails details = new StudioUserDetails(user);
+                        UsernamePasswordAuthenticationToken auth =
+                                new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
+                        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(auth);
                     }
                 } catch (JwtException | IllegalArgumentException e) {
                     SecurityContextHolder.clearContext();

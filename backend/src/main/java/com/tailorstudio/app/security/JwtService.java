@@ -27,11 +27,10 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
-    public String createAccessToken(long userId, long sessionEpoch) {
+    public String createAccessToken(long userId) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(Long.toString(userId))
-                .claim("epoch", sessionEpoch)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMs)))
                 .signWith(key)

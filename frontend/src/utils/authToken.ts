@@ -1,20 +1,46 @@
 const KEY = 'ts_access_token'
 
+/** Prefer sessionStorage; fall back to localStorage (some mobile / privacy modes behave differently). */
 export function getAccessToken(): string | null {
   try {
-    const t = sessionStorage.getItem(KEY)
-    return t && t.length > 0 ? t : null
+    const a = sessionStorage.getItem(KEY)
+    if (a && a.length > 0) return a
+    const b = localStorage.getItem(KEY)
+    return b && b.length > 0 ? b : null
   } catch {
-    return null
+    try {
+      const b = localStorage.getItem(KEY)
+      return b && b.length > 0 ? b : null
+    } catch {
+      return null
+    }
   }
 }
 
 export function setAccessToken(token: string | null): void {
   try {
-    if (token) sessionStorage.setItem(KEY, token)
-    else sessionStorage.removeItem(KEY)
+    if (token) {
+      sessionStorage.setItem(KEY, token)
+      try {
+        localStorage.setItem(KEY, token)
+      } catch {
+        // session-only is OK
+      }
+    } else {
+      sessionStorage.removeItem(KEY)
+      try {
+        localStorage.removeItem(KEY)
+      } catch {
+        // ignore
+      }
+    }
   } catch {
-    // ignore
+    try {
+      if (token) localStorage.setItem(KEY, token)
+      else localStorage.removeItem(KEY)
+    } catch {
+      // ignore
+    }
   }
 }
 

@@ -84,8 +84,6 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     void refreshMe()
   }, [refreshMe])
 
-  // Multi-device session takeover: when the user logs in elsewhere, our epoch filter will
-  // start returning 401. Poll /api/me silently so the UI logs out quickly without needing refresh.
   useEffect(() => {
     if (state.status !== 'authed') return
 
@@ -110,7 +108,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVis)
 
-    // Delay first poll so it never races the cookie/session right after OTP redirect; then poll lightly.
+    // Keep session fresh / detect server-side revocation.
     const startDelay = window.setTimeout(() => {
       tick()
     }, 8000)

@@ -3,7 +3,6 @@ import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-route
 
 import { useAuth } from '../context/AuthContext'
 import { useAppToast } from '../utils/toast'
-import { api } from '../services/api/api'
 import { appService } from '../services/appService'
 import tailorLogo from '../assets/tailor-logo.png'
 
@@ -79,14 +78,7 @@ export const AppShell = memo(function AppShell() {
     if (signingOut) return
     setSigningOut(true)
 
-    const res = await api.postJsonLogout('/api/auth/logout').catch(() => null)
-
-    const success = !!res && (res.ok || res.status === 204)
-    if (!success) {
-      toast.error('Logout failed. Please retry.')
-      setSigningOut(false)
-      return
-    }
+    // JWT auth: logout is local (drop token). If server has a logout endpoint, it can be called later.
 
     // Immediately clear local auth so /app routes require login.
     clearAuth()

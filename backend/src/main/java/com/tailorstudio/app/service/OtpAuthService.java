@@ -274,9 +274,9 @@ public class OtpAuthService {
     }
 
     private LoginVerifyOutcome issueLoginTokens(User user) {
-        long epoch = userSessionEpochService.bumpEpoch(user.getId());
+        // Multiple device logins are allowed. We do NOT bump session epoch on login.
         User refreshed = userRepository.findById(user.getId()).orElse(user);
-        String accessToken = jwtService.createAccessToken(refreshed.getId(), epoch);
+        String accessToken = jwtService.createAccessToken(refreshed.getId());
         return new LoginVerifyOutcome(refreshed, accessToken);
     }
 

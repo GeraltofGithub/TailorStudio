@@ -2,9 +2,7 @@ package com.tailorstudio.app.web;
 
 import com.tailorstudio.app.dto.StaffJoinRequest;
 import com.tailorstudio.app.dto.StudioSignupRequest;
-import com.tailorstudio.app.security.CurrentUserService;
 import com.tailorstudio.app.service.AuthService;
-import com.tailorstudio.app.service.UserSessionEpochService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,24 +17,9 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
-    private final CurrentUserService currentUserService;
-    private final UserSessionEpochService userSessionEpochService;
 
-    public AuthController(
-            AuthService authService,
-            CurrentUserService currentUserService,
-            UserSessionEpochService userSessionEpochService) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
-        this.currentUserService = currentUserService;
-        this.userSessionEpochService = userSessionEpochService;
-    }
-
-    /** Invalidates JWTs by bumping {@code sessionEpoch} (same as “logged in elsewhere”). */
-    @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        var u = currentUserService.requireUser();
-        userSessionEpochService.bumpEpoch(u.getUserId());
-        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/signup")

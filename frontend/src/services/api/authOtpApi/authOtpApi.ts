@@ -19,12 +19,18 @@ export async function otpLoginResend(pendingToken: string): Promise<OtpSendOk> {
 }
 
 export async function otpLoginVerify(email: string, code: string, pendingToken: string): Promise<MeResponse> {
-  const r = await api._post<{ ok: true; me: MeResponse; accessToken: string }>('/api/auth/otp/login/verify', {
+  const r = await api._post<{ ok: true; me: MeResponse; accessToken?: string }>('/api/auth/otp/login/verify', {
     email,
     code,
     pendingToken,
   })
-  setAccessToken(r.accessToken)
+  const token = r.accessToken
+  if (typeof token !== 'string' || token.length < 10) {
+    throw new Error(
+      'Sign-in succeeded but no access token was returned. Deploy the latest API (JWT) and frontend, then hard-refresh.',
+    )
+  }
+  setAccessToken(token)
   return r.me
 }
 
