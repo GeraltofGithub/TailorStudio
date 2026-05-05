@@ -9,6 +9,7 @@ class Api {
     if (contentType) h['Content-Type'] = contentType
     const t = getAccessToken()
     if (t) h['Authorization'] = `Bearer ${t}`
+    console.log(`[API] _authHeaders built for ${contentType ? 'POST' : 'GET'}. Token present? ${!!t}`)
     return h
   }
 
@@ -31,12 +32,15 @@ class Api {
         signal: fetchOpts?.signal,
       })
 
+    console.log(`[API] Firing request to ${url} (method: ${method}). Credentials: omit`)
     let r = await doFetch()
+    console.log(`[API] Response from ${url}: status = ${r.status}`)
 
     if (r.status === 401) {
       const pathOnly = url.split('?')[0]
       const isMeProbe = method === 'GET' && pathOnly === '/api/me'
       if (!pathOnly.startsWith('/api/auth/') && !isMeProbe) {
+        console.warn(`[API] 401 on ${pathOnly}! Clearing token and dispatching auth:logout.`)
         clearAccessToken()
         window.dispatchEvent(new CustomEvent('auth:logout'))
       }

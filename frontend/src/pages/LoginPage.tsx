@@ -133,20 +133,27 @@ export default memo(function LoginPage() {
     setPending(true)
     try {
       await triggerBackendWarmup()
+      console.log('[LOGIN] Verifying OTP...')
       const me = await authOtp.otpLoginVerify(loginEmail.trim(), code, pendingToken)
+      console.log('[LOGIN] OTP Verified successfully. Calling refreshMe...')
       const ok = await refreshMe({ silent: true, initialMe: me })
+      console.log(`[LOGIN] refreshMe returned: ${ok}`)
       if (!ok) {
+        console.warn('[LOGIN] refreshMe failed. Could not complete sign-in.')
         toast.error('Could not complete sign-in.')
         return
       }
+      console.log('[LOGIN] Auth is ready. Preparing redirect to /app/dashboard.')
       resetSessionReadCaches()
       try {
         sessionStorage.setItem('ts_login_success', '1')
       } catch {
         // ignore
       }
+      console.log('[LOGIN] Navigating to /app/dashboard')
       nav('/app/dashboard', { replace: true })
     } catch (e: any) {
+      console.error('[LOGIN] OTP Verification failed with error:', e)
       if (e?.payload?.error === 'invalid_otp' || e?.status === 400) toast.error('Invalid code.')
       else toast.error(e?.message || 'Verification failed.')
     } finally {
@@ -205,8 +212,10 @@ export default memo(function LoginPage() {
                 const mySeq = ++challengeSeqRef.current
                 setPending(true)
                 try {
+                  console.log(`[LOGIN] Submitting credentials for ${email}`)
                   await triggerBackendWarmup(ac.signal)
                   const r = await authOtp.otpLoginChallenge(email, password, { signal: ac.signal })
+                  console.log('[LOGIN] Challenge received. Proceeding to OTP phase.')
                   if (mySeq !== challengeSeqRef.current) return
                   setLoginEmail(email)
                   setPasswordInput('')
@@ -217,6 +226,7 @@ export default memo(function LoginPage() {
                   setPhase('otp')
                   toast.success(r.staticOtp === true ? 'Enter your sign-in code.' : 'Code sent. Check your inbox.')
                 } catch (err: any) {
+                  console.error('[LOGIN] Credentials submit failed:', err)
                   if (err?.name === 'AbortError' || ac.signal.aborted) return
                   const code = err?.payload?.error
                   if (err?.status === 404 && code === 'no_account') toast.error('Account does not exist.')

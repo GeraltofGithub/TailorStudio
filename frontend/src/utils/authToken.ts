@@ -23,26 +23,40 @@ function setCookie(name: string, value: string | null, days: number = 30) {
 export function getAccessToken(): string | null {
   try {
     const b = localStorage.getItem(KEY)
-    if (b && b.length > 0) return b
-  } catch {
-    // ignore
-  }
-  return getCookie(KEY)
-}
-
-export function setAccessToken(token: string | null): void {
-  try {
-    if (token) {
-      localStorage.setItem(KEY, token)
-    } else {
-      localStorage.removeItem(KEY)
+    if (b && b.length > 0) {
+      console.log('[AUTH] getAccessToken: found in localStorage (len:', b.length, ')')
+      return b
     }
   } catch {
     // ignore
   }
+  const c = getCookie(KEY)
+  if (c) {
+    console.log('[AUTH] getAccessToken: found in cookie (len:', c.length, ')')
+    return c
+  }
+  console.log('[AUTH] getAccessToken: no token found')
+  return null
+}
+
+export function setAccessToken(token: string | null): void {
+  console.log(`[AUTH] setAccessToken called. Has token? ${!!token} ${token ? '(len: ' + token.length + ')' : ''}`)
+  try {
+    if (token) {
+      localStorage.setItem(KEY, token)
+      console.log('[AUTH] setAccessToken: localStorage updated')
+    } else {
+      localStorage.removeItem(KEY)
+      console.log('[AUTH] setAccessToken: localStorage cleared')
+    }
+  } catch (err) {
+    console.warn('[AUTH] setAccessToken: localStorage failed:', err)
+  }
   setCookie(KEY, token)
+  console.log('[AUTH] setAccessToken: cookie updated')
 }
 
 export function clearAccessToken(): void {
+  console.log('[AUTH] clearAccessToken called')
   setAccessToken(null)
 }
