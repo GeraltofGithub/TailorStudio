@@ -59,7 +59,8 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
       if (gen !== refreshGenRef.current) return true
       startTransition(() => setState({ status: 'authed', me }))
       return true
-    } catch {
+    } catch (error: any) {
+      const err = error
       if (gen !== refreshGenRef.current) return false
       if (silent) {
         try {
@@ -73,8 +74,10 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
           if (gen !== refreshGenRef.current) return false
         }
       }
-      clearAccessToken()
-      resetSessionReadCaches()
+      if (err?.status === 401 || err?.status === 403) {
+        clearAccessToken()
+        resetSessionReadCaches()
+      }
       startTransition(() => setState({ status: 'anon', me: null }))
       return false
     }

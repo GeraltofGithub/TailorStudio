@@ -34,6 +34,13 @@ public class CorsConfig {
                 .stream()
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
+                .map(s -> {
+                    if (!s.startsWith("http://") && !s.startsWith("https://")) {
+                        // Default to https:// if no protocol is provided
+                        return "https://" + s;
+                    }
+                    return s;
+                })
                 .toList();
         cfg.setAllowedOrigins(origins);
 
