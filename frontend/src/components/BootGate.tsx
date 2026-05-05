@@ -66,24 +66,74 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
       }
     })()
 
+    const doExit = async () => {
+      if (cancelled) return
+      setPhase('exit')
+      await delay(EXIT_MS)
+      if (cancelled) return
+      setPhase('done')
+    }
+
     // Wake backend while the animation runs. Do NOT tie these to route-transition abort:
     // if the user clicks "Sign in" mid-sequence, we still want health/warmup/welcome to finish warming Render.
     void (async () => {
+      // 1) Loop the 3 animation phases so the user doesn't get stuck on one for too long
+      let loopRunning = true
+      const runLoop = async () => {
+        while (loopRunning && !cancelled) {
+          setWakePhase('starting')
+          await delay(2500)
+          if (!loopRunning || cancelled) break
+          setWakePhase('health')
+          await delay(3500)
+          if (!loopRunning || cancelled) break
+          setWakePhase('welcome')
+          await delay(2500)
+        }
+      }
+      runLoop()
+
+      // 2) Keep hitting the backend until it fully wakes up
+      const apiCalls = async () => {
+        let welcomeRes = null
+        while (!cancelled) {
+          const hOk = await fetchBootHealth()
+          if (!hOk && !cancelled) { await delay(2000); continue }
+
+          const wOk = await fetchBootWarmup()
+          if (!wOk && !cancelled) { await delay(2000); continue }
+
+          const w = await fetchBootWelcome()
+          if ((!w || !w.ok) && !cancelled) { await delay(2000); continue }
+
+          welcomeRes = w
+          break
+        }
+        return welcomeRes
+      }
+
+      // Max total loading time is 1 minute
+      const timeoutPromise = delay(60000).then(() => 'timeout' as const)
+
       try {
-        await Promise.all([fetchBootHealth(), delay(2500)])
-        if (cancelled) return
-        setWakePhase('health')
-        
-        await Promise.all([fetchBootWarmup(), delay(3500)])
+        const result = await Promise.race([apiCalls(), timeoutPromise])
         if (cancelled) return
         
-        const [w] = await Promise.all([fetchBootWelcome(), delay(2000)])
-        if (cancelled) return
-        setWelcomeMessage(w.message ?? null)
-        setWelcomeTagline(w.tagline ?? null)
-        setWakePhase('welcome')
+        loopRunning = false
+
+        if (result && result !== 'timeout' && result.message) {
+          setWelcomeMessage(result.message)
+          setWelcomeTagline(result.tagline ?? null)
+          setWakePhase('welcome')
+          await delay(MIN_BRAND_MS)
+        }
+        
+        await doExit()
       } catch {
-        if (!cancelled) setWakePhase('welcome')
+        if (!cancelled) {
+          loopRunning = false
+          await doExit()
+        }
       }
     })()
 
@@ -93,24 +143,6 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
       skipMeAcRef.current = null
     }
   }, [pathname, sewLowMotion])
-
-  useEffect(() => {
-    let cancelled = false
-    if (wakePhase === 'welcome') {
-      void (async () => {
-        // Delay so they at least see the brand animation for a moment
-        await delay(MIN_BRAND_MS)
-        if (cancelled || skipMeAcRef.current?.signal.aborted) return
-        setPhase('exit')
-        await delay(EXIT_MS)
-        if (cancelled || skipMeAcRef.current?.signal.aborted) return
-        setPhase('done')
-      })()
-    }
-    return () => {
-      cancelled = true
-    }
-  }, [wakePhase])
 
   useEffect(() => {
     if (phase !== 'done') return
