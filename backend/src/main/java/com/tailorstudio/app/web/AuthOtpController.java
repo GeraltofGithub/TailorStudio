@@ -6,11 +6,9 @@ import com.tailorstudio.app.dto.OtpEmailRequest;
 import com.tailorstudio.app.dto.OtpLoginVerifyRequest;
 import com.tailorstudio.app.dto.OtpVerifyRequest;
 import com.tailorstudio.app.dto.PasswordResetRequest;
-import com.tailorstudio.app.security.CurrentUserService;
+import com.tailorstudio.app.security.StudioUserDetails;
 import com.tailorstudio.app.service.MePayloadService;
 import com.tailorstudio.app.service.OtpAuthService;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,12 +26,10 @@ import java.util.Map;
 public class AuthOtpController {
 
     private final OtpAuthService otpAuthService;
-    private final CurrentUserService currentUserService;
     private final MePayloadService mePayloadService;
 
-    public AuthOtpController(OtpAuthService otpAuthService, CurrentUserService currentUserService, MePayloadService mePayloadService) {
+    public AuthOtpController(OtpAuthService otpAuthService, MePayloadService mePayloadService) {
         this.otpAuthService = otpAuthService;
-        this.currentUserService = currentUserService;
         this.mePayloadService = mePayloadService;
     }
 
@@ -80,14 +76,11 @@ public class AuthOtpController {
     }
 
     @PostMapping("/login/verify")
-    public ResponseEntity<?> loginVerify(
-            @Valid @RequestBody OtpLoginVerifyRequest body,
-            HttpServletRequest request,
-            HttpServletResponse response) {
+    public ResponseEntity<?> loginVerify(@Valid @RequestBody OtpLoginVerifyRequest body) {
         try {
-            otpAuthService.verifyLoginOtp(body.email(), body.code(), body.pendingToken(), request, response);
-            var me = mePayloadService.buildFor(currentUserService.requireUser());
-            return ResponseEntity.ok(Map.of("ok", true, "me", me));
+            var out = otpAuthService.verifyLoginOtp(body.email(), body.code(), body.pendingToken());
+            var me = mePayloadService.buildFor(new StudioUserDetails(out.user()));
+            return ResponseEntity.ok(Map.of("ok", true, "me", me, "accessToken", out.accessToken()));
         } catch (OtpAuthService.OtpInvalidException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("ok", false, "error", "invalid_otp"));
         }

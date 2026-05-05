@@ -5,6 +5,7 @@ import type { MeResponse } from '../services/api/authApi/authApi'
 import { authApi } from '../services/api/authApi/authApi'
 import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import { authService } from '../services/authService'
+import { clearAccessToken } from '../utils/authToken'
 
 type AuthState =
   | { status: 'loading'; me: null }
@@ -32,6 +33,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
   const clearAuth = useCallback(() => {
     refreshGenRef.current += 1
     authApi.cancelPendingMe()
+    clearAccessToken()
     resetSessionReadCaches()
     setState({ status: 'anon', me: null })
   }, [])
@@ -71,6 +73,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
           if (gen !== refreshGenRef.current) return false
         }
       }
+      clearAccessToken()
       resetSessionReadCaches()
       startTransition(() => setState({ status: 'anon', me: null }))
       return false
@@ -127,6 +130,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
     const onLogout = () => {
       refreshGenRef.current += 1
       authApi.cancelPendingMe()
+      clearAccessToken()
       resetSessionReadCaches()
       setState({ status: 'anon', me: null })
     }

@@ -79,17 +79,9 @@ export const AppShell = memo(function AppShell() {
     if (signingOut) return
     setSigningOut(true)
 
-    // Use the shared API client so CSRF is sourced from X-XSRF-TOKEN response headers
-    // (critical for cross-origin cookie setups like Vercel + Render).
-    const res = await api.postFormLogout('/logout', new URLSearchParams()).catch(() => null)
+    const res = await api.postJsonLogout('/api/auth/logout').catch(() => null)
 
-    // Prefer 204 from API; if backend still redirects, fetch is configured with redirect:'manual' so we don't follow HTML pages on the API host.
-    const success =
-      !!res &&
-      (res.ok ||
-        res.type === 'opaqueredirect' ||
-        (res.status >= 300 && res.status < 400) ||
-        res.status === 0)
+    const success = !!res && (res.ok || res.status === 204)
     if (!success) {
       toast.error('Logout failed. Please retry.')
       setSigningOut(false)

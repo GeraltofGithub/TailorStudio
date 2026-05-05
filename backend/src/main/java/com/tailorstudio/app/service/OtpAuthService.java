@@ -12,24 +12,15 @@ import com.tailorstudio.app.repo.OtpChallengeRepository;
 import com.tailorstudio.app.repo.PasswordResetTokenRepository;
 import com.tailorstudio.app.repo.PendingLoginRepository;
 import com.tailorstudio.app.repo.UserRepository;
+import com.tailorstudio.app.security.JwtService;
 import com.tailorstudio.app.security.OtpCodeHasher;
-import com.tailorstudio.app.security.SessionEpochEnforcementFilter;
-import com.tailorstudio.app.security.StudioUserDetails;
 import jakarta.annotation.PostConstruct;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +38,8 @@ public class OtpAuthService {
     private static final Duration PENDING_LOGIN_TTL = Duration.ofMinutes(10);
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(15);
 
+    public record LoginVerifyOutcome(User user, String accessToken) {}
+
     private final UserRepository userRepository;
     private final OtpChallengeRepository otpChallengeRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
@@ -57,6 +50,7 @@ public class OtpAuthService {
     private final UserAuthLookup userAuthLookup;
     private final ApplicationEventPublisher eventPublisher;
     private final UserSessionEpochService userSessionEpochService;
+    private final JwtService jwtService;
     private final String otpPepper;
     private final String brandPublicUrl;
     private final boolean staticOtpEnabledRaw;
@@ -64,8 +58,6 @@ public class OtpAuthService {
     private boolean staticOtpActive;
     /** Exactly six digits from {@link #staticOtpCodeRaw}, used for comparison after {@link #initStaticOtp}. */
     private String staticOtpDigits = "";
-
-    private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
     public OtpAuthService(
             UserRepository userRepository,
@@ -78,6 +70,7 @@ public class OtpAuthService {
             UserAuthLookup userAuthLookup,
             ApplicationEventPublisher eventPublisher,
             UserSessionEpochService userSessionEpochService,
+            JwtService jwtService,
             @Value("${app.otp.pepper}") String otpPepper,
             @Value("${app.brand.public-url:}") String brandPublicUrl,
             @Value("${app.otp.static-enabled:false}") boolean staticOtpEnabledRaw,
@@ -92,6 +85,7 @@ public class OtpAuthService {
         this.userAuthLookup = userAuthLookup;
         this.eventPublisher = eventPublisher;
         this.userSessionEpochService = userSessionEpochService;
+        this.jwtService = jwtService;
         this.otpPepper = otpPepper;
         this.brandPublicUrl = brandPublicUrl;
         this.staticOtpEnabledRaw = staticOtpEnabledRaw;
@@ -248,7 +242,7 @@ public class OtpAuthService {
     }
 
     @Transactional
-    public void verifyLoginOtp(String emailRaw, String code, String pendingTokenPlain, HttpServletRequest request, HttpServletResponse response) {
+    public LoginVerifyOutcome verifyLoginOtp(String emailRaw, String code, String pendingTokenPlain) {
         String email = normalizeEmail(emailRaw);
         String th = OtpCodeHasher.sha256Hex(pendingTokenPlain.trim());
         PendingLogin pl = pendingLoginRepository.findByTokenHashAndExpiresAtAfter(th, Instant.now()).orElseThrow(OtpInvalidException::new);
@@ -260,8 +254,7 @@ public class OtpAuthService {
             otpChallengeRepository.deleteByEmailIgnoreCaseAndPurpose(email, OtpPurpose.LOGIN);
             pendingLoginRepository.deleteById(pl.getId());
             User user = userRepository.findById(pl.getUserId()).orElseThrow();
-            establishSession(user, request, response);
-            return;
+            return issueLoginTokens(user);
         }
         OtpChallenge c = otpChallengeRepository
                 .findTopByEmailIgnoreCaseAndPurposeAndExpiresAtAfterOrderByCreatedAtDesc(email, OtpPurpose.LOGIN, now)
@@ -277,7 +270,14 @@ public class OtpAuthService {
         otpChallengeRepository.deleteById(c.getId());
         pendingLoginRepository.deleteById(pl.getId());
         User user = userRepository.findById(pl.getUserId()).orElseThrow();
-        establishSession(user, request, response);
+        return issueLoginTokens(user);
+    }
+
+    private LoginVerifyOutcome issueLoginTokens(User user) {
+        long epoch = userSessionEpochService.bumpEpoch(user.getId());
+        User refreshed = userRepository.findById(user.getId()).orElse(user);
+        String accessToken = jwtService.createAccessToken(refreshed.getId(), epoch);
+        return new LoginVerifyOutcome(refreshed, accessToken);
     }
 
     @Transactional
@@ -333,23 +333,6 @@ public class OtpAuthService {
         PasswordResetToken pr = passwordResetTokenRepository.findByTokenHashAndExpiresAtAfter(th, Instant.now()).orElseThrow(OtpInvalidException::new);
         authService.updatePasswordForUser(pr.getUserId(), newPassword);
         passwordResetTokenRepository.deleteById(pr.getId());
-    }
-
-    private void establishSession(User user, HttpServletRequest request, HttpServletResponse response) {
-        long epoch = userSessionEpochService.bumpEpoch(user.getId());
-        HttpSession old = request.getSession(false);
-        if (old != null) {
-            old.invalidate();
-        }
-        HttpSession session = request.getSession(true);
-        session.setAttribute(SessionEpochEnforcementFilter.SESSION_EPOCH_ATTR, epoch);
-        User refreshed = userRepository.findById(user.getId()).orElse(user);
-        StudioUserDetails details = new StudioUserDetails(refreshed);
-        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(auth);
-        SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, request, response);
     }
 
     public static final class NoSuchUserException extends RuntimeException {}

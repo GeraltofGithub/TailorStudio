@@ -1,5 +1,6 @@
 import type { MeResponse } from '../authApi/authApi'
 import { api } from '../api'
+import { setAccessToken } from '../../../utils/authToken'
 
 export type OtpSendOk = { ok: true; expiresAt: string }
 
@@ -18,7 +19,12 @@ export async function otpLoginResend(pendingToken: string): Promise<OtpSendOk> {
 }
 
 export async function otpLoginVerify(email: string, code: string, pendingToken: string): Promise<MeResponse> {
-  const r = await api._post<{ ok: true; me: MeResponse }>('/api/auth/otp/login/verify', { email, code, pendingToken })
+  const r = await api._post<{ ok: true; me: MeResponse; accessToken: string }>('/api/auth/otp/login/verify', {
+    email,
+    code,
+    pendingToken,
+  })
+  setAccessToken(r.accessToken)
   return r.me
 }
 

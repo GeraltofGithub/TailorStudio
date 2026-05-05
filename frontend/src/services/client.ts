@@ -1,5 +1,4 @@
-import Cookies from 'js-cookie'
-
+import { getAccessToken } from '../utils/authToken'
 import { BASE_URL } from '../utils/constants'
 
 function joinUrl(path: string) {
@@ -7,22 +6,27 @@ function joinUrl(path: string) {
   return `${BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
-function csrfHeaders() {
-  const t = Cookies.get('XSRF-TOKEN')
+function jsonHeaders(): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (t) h['X-XSRF-TOKEN'] = t
+  const t = getAccessToken()
+  if (t) h['Authorization'] = `Bearer ${t}`
   return h
 }
 
 export async function apiGet(path: string) {
-  return fetch(joinUrl(path), { credentials: 'include', cache: 'no-store' })
+  const t = getAccessToken()
+  return fetch(joinUrl(path), {
+    credentials: 'omit',
+    cache: 'no-store',
+    headers: t ? { Authorization: `Bearer ${t}` } : undefined,
+  })
 }
 
 export async function apiPostJson<TBody>(path: string, body: TBody) {
   return fetch(joinUrl(path), {
     method: 'POST',
-    credentials: 'include',
-    headers: csrfHeaders(),
+    credentials: 'omit',
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   })
 }
@@ -30,8 +34,8 @@ export async function apiPostJson<TBody>(path: string, body: TBody) {
 export async function apiPutJson<TBody>(path: string, body: TBody) {
   return fetch(joinUrl(path), {
     method: 'PUT',
-    credentials: 'include',
-    headers: csrfHeaders(),
+    credentials: 'omit',
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   })
 }
@@ -39,8 +43,8 @@ export async function apiPutJson<TBody>(path: string, body: TBody) {
 export async function apiPatchJson<TBody>(path: string, body: TBody) {
   return fetch(joinUrl(path), {
     method: 'PATCH',
-    credentials: 'include',
-    headers: csrfHeaders(),
+    credentials: 'omit',
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   })
 }
@@ -48,8 +52,7 @@ export async function apiPatchJson<TBody>(path: string, body: TBody) {
 export async function apiPost(path: string) {
   return fetch(joinUrl(path), {
     method: 'POST',
-    credentials: 'include',
-    headers: csrfHeaders(),
+    credentials: 'omit',
+    headers: jsonHeaders(),
   })
 }
-

@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 
 import { fetchBootHealth, fetchBootWarmup, fetchBootWelcome } from '../services/bootWake'
+import { getAccessToken } from '../utils/authToken'
 import { apiUrl } from '../utils/apiOrigin'
 import { SEW_BOOT_TOTAL_MS } from './sewBootAnimator'
 import { BootSplash, type BootWakePhase } from './BootSplash'
@@ -57,11 +58,13 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
     // Already signed in (e.g. F5 on /app): skip sewing splash — cold wake only for anonymous visitors.
     void (async () => {
       try {
+        const token = getAccessToken()
         const me = await fetch(apiUrl('/api/me'), {
           method: 'GET',
-          credentials: 'include',
+          credentials: 'omit',
           cache: 'no-store',
           signal: skipMeAc.signal,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
         if (cancelled || skipMeAc.signal.aborted) return
         if (me.ok) {
