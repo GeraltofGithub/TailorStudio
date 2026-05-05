@@ -5,10 +5,8 @@ import tailorLogo from '../assets/tailor-logo.png'
 import './BootSplash.css'
 
 export type BootWakePhase = 'starting' | 'health' | 'welcome'
-export type BootStage = 'canvas' | 'brand'
 
 type Props = {
-  bootStage: BootStage
   sewLowMotion?: boolean
   message?: string | null
   tagline?: string | null
@@ -24,7 +22,6 @@ function statusForPhase(phase: BootWakePhase, hasWelcomeCopy: boolean): string {
 }
 
 export const BootSplash = memo(function BootSplash({
-  bootStage,
   sewLowMotion = false,
   message,
   tagline,

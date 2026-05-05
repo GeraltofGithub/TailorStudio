@@ -19,7 +19,6 @@ function prefersReducedMotion(): boolean {
 
 export const BootGate = memo(function BootGate({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
-  const [bootStage, setBootStage] = useState<'brand'>('brand')
   const [phase, setPhase] = useState<'boot' | 'exit' | 'done'>('boot')
   const [wakePhase, setWakePhase] = useState<BootWakePhase>('starting')
   const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null)
@@ -123,7 +122,6 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
 
   return (
     <BootSplash
-      bootStage={bootStage}
       sewLowMotion={sewLowMotion}
       message={welcomeMessage}
       tagline={welcomeTagline}
