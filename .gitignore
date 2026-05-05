@@ -36,6 +36,7 @@ backend/.env.*
 
 # Logs
 *.log
+backend/logs/
 
 # BlueJ files
 *.ctxt
