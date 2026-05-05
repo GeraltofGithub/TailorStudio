@@ -25,7 +25,7 @@ class Api {
       fetch(this._joinUrl(url), {
         method,
         credentials: 'omit',
-        cache: method === 'GET' ? 'default' : 'no-store',
+        cache: 'no-store',
         headers: this._authHeaders(contentType),
         body: hasBody ? JSON.stringify(body) : undefined,
         signal: fetchOpts?.signal,
