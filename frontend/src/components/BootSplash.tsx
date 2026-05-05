@@ -46,13 +46,11 @@ export const BootSplash = memo(function BootSplash({
       {wakePhase === 'starting' && (
         <div className="ts-boot__canvas-wrap">
           <SewCanvasBoot mode="cut" lowMotion={sewLowMotion} />
-          <p className="ts-boot__canvas-hint">{statusForPhase(wakePhase, hasWelcomeCopy)}</p>
         </div>
       )}
       {wakePhase === 'health' && (
         <div className="ts-boot__canvas-wrap">
           <SewCanvasBoot mode="sew" lowMotion={sewLowMotion} />
-          <p className="ts-boot__canvas-hint">{statusForPhase(wakePhase, hasWelcomeCopy)}</p>
         </div>
       )}
       {wakePhase === 'welcome' && (
@@ -79,9 +77,7 @@ export const BootSplash = memo(function BootSplash({
             <p className={`ts-boot__tagline${hasWelcomeCopy ? ' ts-boot__tagline--visible' : ''}`}>
               {tagline || 'Your measurements, orders, and team — in one place.'}
             </p>
-            {wakePhase === 'welcome' && (
-              <p className="ts-boot__status">{statusForPhase(wakePhase, hasWelcomeCopy)}</p>
-            )}
+            <p className="ts-boot__status">{statusForPhase(wakePhase, hasWelcomeCopy)}</p>
             <div className="ts-boot__dots" aria-hidden>
               <span />
               <span />
