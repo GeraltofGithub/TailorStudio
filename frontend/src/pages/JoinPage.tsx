@@ -28,12 +28,9 @@ export default memo(function JoinPage() {
   const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (pending) return
-    setPending(true)
-    setMsg(null)
 
-    await triggerBackendWarmup()
-
-    const fd = new FormData(e.currentTarget)
+    const form = e.currentTarget
+    const fd = new FormData(form)
     const body = {
       joinCode: String(fd.get('joinCode') || '').trim(),
       fullName: String(fd.get('fullName') || '').trim(),
@@ -41,15 +38,29 @@ export default memo(function JoinPage() {
       password: String(fd.get('password') || ''),
     }
 
+    setPending(true)
+    setMsg(null)
     try {
-      const data = await joinWithTimeout(authService.staffSignup(body))
+      const data = await joinWithTimeout(
+        Promise.all([
+          triggerBackendWarmup().catch(() => undefined),
+          authService.staffSignup(body),
+        ]).then(([, r]) => r),
+      )
       setMsg({ kind: 'success', text: data.message || 'Joined.' })
       window.setTimeout(() => nav('/login'), 900)
-    } catch (e: any) {
-      setMsg({ kind: 'error', text: e?.message === 'timeout' ? 'Join is taking too long. Please retry in a few seconds.' : e?.payload?.error || e?.payload?.message || e?.message || 'Could not join' })
+    } catch (err: unknown) {
+      const anyErr = err as { message?: string; payload?: { error?: string; message?: string } }
+      setMsg({
+        kind: 'error',
+        text:
+          anyErr?.message === 'timeout'
+            ? 'Join failed: request timed out. Please try again.'
+            : anyErr?.payload?.error || anyErr?.payload?.message || anyErr?.message || 'Could not join',
+      })
+    } finally {
+      setPending(false)
     }
-
-    setPending(false)
   }, [nav, pending])
 
   const msgNode = useMemo(() => {

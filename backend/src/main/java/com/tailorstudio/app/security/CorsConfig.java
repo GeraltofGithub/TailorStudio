@@ -7,10 +7,27 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Configuration
 public class CorsConfig {
+
+    /**
+     * When {@code FRONTEND_URL} points at {@code localhost} / {@code 127.0.0.1}, also allow common Vite ports
+     * so a mismatch (e.g. .env says :5174 but {@code npm run dev} uses :5173) does not produce CORS 403.
+     */
+    private static final List<String> LOCAL_VITE_ORIGINS = List.of(
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174");
+
+    private static boolean isLocalhostStyleOrigin(String o) {
+        return o.startsWith("http://localhost:") || o.startsWith("http://127.0.0.1:");
+    }
 
     /**
      * Comma-separated list of allowed frontend origins.
@@ -30,7 +47,7 @@ public class CorsConfig {
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setExposedHeaders(List.of("Location"));
 
-        List<String> origins = List.of(allowedOriginsRaw.split(","))
+        List<String> parsed = List.of(allowedOriginsRaw.split(","))
                 .stream()
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
@@ -42,7 +59,13 @@ public class CorsConfig {
                     return s;
                 })
                 .toList();
-        cfg.setAllowedOrigins(origins);
+
+        Set<String> merged = new LinkedHashSet<>(parsed);
+        boolean anyLocal = parsed.stream().anyMatch(CorsConfig::isLocalhostStyleOrigin);
+        if (anyLocal) {
+            merged.addAll(LOCAL_VITE_ORIGINS);
+        }
+        cfg.setAllowedOrigins(new ArrayList<>(merged));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);

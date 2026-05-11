@@ -8,7 +8,9 @@ import { Eye, EyeOff } from 'lucide-react'
 import tailorLogo from '../assets/tailor-logo.png'
 import { fetchBootHealth, triggerBackendWarmup } from '../services/bootWake'
 
-async function signupWithTimeout<T>(p: Promise<T>, timeoutMs = 25000): Promise<T> {
+const SIGNUP_TIMEOUT_MS = 20000
+
+async function signupWithTimeout<T>(p: Promise<T>, timeoutMs = SIGNUP_TIMEOUT_MS): Promise<T> {
   return await Promise.race([
     p,
     new Promise<T>((_, reject) => {
@@ -53,36 +55,48 @@ export default memo(function SignupPage() {
     void triggerBackendWarmup()
   }, [introPhase, skipIntro])
 
-  const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (pending) return
-    setPending(true)
+  const onSubmit = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+      if (pending) return
 
-    await triggerBackendWarmup()
+      // Read the form synchronously: React clears `e.currentTarget` after the first `await`.
+      const form = e.currentTarget
+      const fd = new FormData(form)
+      const body = {
+        businessName: String(fd.get('businessName') || '').trim(),
+        tagline: String(fd.get('tagline') || '').trim() || null,
+        address: String(fd.get('address') || '').trim() || null,
+        phone: String(fd.get('phone') || '').trim() || null,
+        secondaryPhone: String(fd.get('secondaryPhone') || '').trim() || null,
+        ownerName: String(fd.get('ownerName') || '').trim(),
+        email: String(fd.get('email') || '').trim(),
+        password: String(fd.get('password') || ''),
+      }
 
-    const fd = new FormData(e.currentTarget)
-    const body = {
-      businessName: String(fd.get('businessName') || '').trim(),
-      tagline: String(fd.get('tagline') || '').trim() || null,
-      address: String(fd.get('address') || '').trim() || null,
-      phone: String(fd.get('phone') || '').trim() || null,
-      secondaryPhone: String(fd.get('secondaryPhone') || '').trim() || null,
-      ownerName: String(fd.get('ownerName') || '').trim(),
-      email: String(fd.get('email') || '').trim(),
-      password: String(fd.get('password') || ''),
-    }
-
-    try {
-      const data = await signupWithTimeout(authService.signup(body))
-      toast.success(data.message || 'Studio created')
-      nav('/login', { replace: true })
-    } catch (e: any) {
-      const msg = e?.message === 'timeout' ? 'Create studio is taking too long. Please retry in a few seconds.' : e?.payload?.error || e?.payload?.message || e?.message
-      toast.error(msg ? String(msg) : 'Could not create studio. Please try again.')
-    }
-
-    setPending(false)
-  }, [nav, pending, toast])
+      setPending(true)
+      try {
+        const data = await signupWithTimeout(
+          Promise.all([
+            triggerBackendWarmup().catch(() => undefined),
+            authService.signup(body),
+          ]).then(([, signupResult]) => signupResult),
+        )
+        toast.success(data.message || 'Studio created')
+        nav('/login', { replace: true })
+      } catch (err: unknown) {
+        const anyErr = err as { message?: string; payload?: { error?: string; message?: string } }
+        const msg =
+          anyErr?.message === 'timeout'
+            ? 'Sign up failed: request timed out. Please try again.'
+            : anyErr?.payload?.error || anyErr?.payload?.message || anyErr?.message
+        toast.error(msg ? String(msg) : 'Sign up failed. Please try again.')
+      } finally {
+        setPending(false)
+      }
+    },
+    [nav, pending, toast],
+  )
 
   return (
     <div className="auth-with-header">
@@ -108,7 +122,9 @@ export default memo(function SignupPage() {
             <fieldset disabled={pending} style={{ border: 'none', margin: 0, padding: 0, display: 'grid', gap: '1rem' }}>
           <div className="form-grid two">
             <div>
-              <label htmlFor="businessName">Studio name</label>
+              <label htmlFor="businessName">
+                Studio name <span className="req-mark" aria-hidden="true">*</span>
+              </label>
               <input id="businessName" name="businessName" required maxLength={200} placeholder="e.g. Mohit & Mini Designer Studio" />
             </div>
             <div>
@@ -133,16 +149,22 @@ export default memo(function SignupPage() {
           <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0.5rem 0' }} />
           <div className="form-grid two">
             <div>
-              <label htmlFor="ownerName">Your name</label>
+              <label htmlFor="ownerName">
+                Your name <span className="req-mark" aria-hidden="true">*</span>
+              </label>
               <input id="ownerName" name="ownerName" required maxLength={120} />
             </div>
             <div>
-              <label htmlFor="email">Email (login)</label>
+              <label htmlFor="email">
+                Email (login) <span className="req-mark" aria-hidden="true">*</span>
+              </label>
               <input type="email" id="email" name="email" required autoComplete="email" />
             </div>
           </div>
           <div>
-            <label htmlFor="password">Password (min 8)</label>
+            <label htmlFor="password">
+              Password (min 8) <span className="req-mark" aria-hidden="true">*</span>
+            </label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPass ? 'text' : 'password'}
