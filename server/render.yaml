@@ -1,0 +1,31 @@
+# Render Blueprint — Web Service (Node API + WebSocket)
+# Docs: https://render.com/docs/deploy-node-express-app
+services:
+  - type: web
+    name: tailor-studio-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: 'true'
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: CORS_ALLOW_VERCEL_PREVIEWS
+        value: 'true'
+      - key: MONGOURI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OTP_PEPPER
+        sync: false
+      - key: EMAIL
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false

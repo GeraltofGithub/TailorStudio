@@ -8,6 +8,9 @@ import { BootSplash, type BootWakePhase } from './BootSplash'
 
 const MIN_BRAND_MS = 1500
 const EXIT_MS = 520
+/** Max wait for backend wake during splash; still exits gracefully on timeout. */
+const BOOT_MAX_MS = 55_000
+const HEALTH_FAIL_MAX = 12
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => window.setTimeout(r, ms))
@@ -34,7 +37,8 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
       pathname.startsWith('/login') ||
       pathname.startsWith('/signup') ||
       pathname.startsWith('/join') ||
-      pathname.startsWith('/forgot-password')
+      pathname.startsWith('/forgot-password') ||
+      new URLSearchParams(window.location.search).has('skipboot')
     ) {
       setPhase('done')
       return
@@ -95,16 +99,29 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
 
       // 2) Keep hitting the backend until it fully wakes up
       const apiCalls = async () => {
-        let welcomeRes = null
+        let welcomeRes: Awaited<ReturnType<typeof fetchBootWelcome>> | null = null
+        let healthFails = 0
         while (!cancelled) {
           const hOk = await fetchBootHealth()
-          if (!hOk && !cancelled) { await delay(2000); continue }
+          if (!hOk) {
+            healthFails += 1
+            if (healthFails >= HEALTH_FAIL_MAX) return null
+            if (!cancelled) await delay(1500)
+            continue
+          }
+          healthFails = 0
 
           const wOk = await fetchBootWarmup()
-          if (!wOk && !cancelled) { await delay(2000); continue }
+          if (!wOk && !cancelled) {
+            await delay(1500)
+            continue
+          }
 
           const w = await fetchBootWelcome()
-          if ((!w || !w.ok) && !cancelled) { await delay(2000); continue }
+          if (!w?.ok && !cancelled) {
+            await delay(1500)
+            continue
+          }
 
           welcomeRes = w
           break
@@ -112,8 +129,7 @@ export const BootGate = memo(function BootGate({ children }: { children: ReactNo
         return welcomeRes
       }
 
-      // Max total loading time is 1 minute
-      const timeoutPromise = delay(60000).then(() => 'timeout' as const)
+      const timeoutPromise = delay(BOOT_MAX_MS).then(() => 'timeout' as const)
 
       try {
         const result = await Promise.race([apiCalls(), timeoutPromise])

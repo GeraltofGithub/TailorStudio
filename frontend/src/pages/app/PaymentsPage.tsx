@@ -1,14 +1,15 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { onOrdersChanged } from '../../services/businessRealtime'
 import { useAuth } from '../../context/AuthContext'
 import { orderSlipHtml, paymentReceiptHtml, printElement } from '../../utils/receipt'
 
 export default memo(function PaymentsPage() {
   const { state } = useAuth()
   const [sp] = useSearchParams()
-  const selId = sp.get('id') ? Number(sp.get('id')) : null
+  const selId = sp.get('id') || null
 
   const [orders, setOrders] = useState<any[]>([])
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
@@ -27,39 +28,53 @@ export default memo(function PaymentsPage() {
     }
   }, [state])
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      const list = await appService.orders.list()
-      if (!alive) return
-      setOrders(list || [])
-    })()
-    return () => {
-      alive = false
+  const refreshList = useCallback(async () => {
+    const list = await appService.orders.list()
+    setOrders(list || [])
+  }, [])
+
+  const refreshSelected = useCallback(async (orderId: string | null) => {
+    if (!orderId) {
+      setSelectedOrder(null)
+      return
+    }
+    try {
+      setSelectedOrder(await appService.orders.get(orderId))
+    } catch {
+      setSelectedOrder(null)
     }
   }, [])
 
   useEffect(() => {
     let alive = true
     ;(async () => {
-      if (!selId) {
-        if (alive) setSelectedOrder(null)
-        return
-      }
-      let o: any
-      try {
-        o = await appService.orders.get(selId)
-      } catch {
-        if (alive) setSelectedOrder(null)
-        return
-      }
       if (!alive) return
-      setSelectedOrder(o)
+      await refreshList()
     })()
     return () => {
       alive = false
     }
-  }, [selId])
+  }, [refreshList])
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (!alive) return
+      await refreshSelected(selId)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [selId, refreshSelected])
+
+  useEffect(() => {
+    return onOrdersChanged((detail) => {
+      void refreshList()
+      if (selId && detail.orderId && String(detail.orderId) === selId) {
+        void refreshSelected(selId)
+      }
+    })
+  }, [refreshList, refreshSelected, selId])
 
   useEffect(() => {
     const o = selectedOrder

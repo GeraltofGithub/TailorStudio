@@ -2,6 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { publishCustomersChanged } from '../../services/businessRealtime'
+import { idFromApi } from '../../utils/apiId'
 import { useAppToast } from '../../utils/toast'
 
 type Garment =
@@ -179,7 +181,7 @@ function MeasureEditor({
 
 export default memo(function CustomerPage() {
   const [sp] = useSearchParams()
-  const cid = sp.get('id') ? Number(sp.get('id')) : null
+  const cid = sp.get('id') || null
   const nav = useNavigate()
   const toast = useAppToast()
   const [creatingCustomer, setCreatingCustomer] = useState(false)
@@ -259,12 +261,17 @@ export default memo(function CustomerPage() {
       if (!cid) return
       setActiveLoading(true)
       setActiveGarment(g)
-      const m = await appService.customers.getMeasurement(cid, g)
-      const payload = parsePayloadJson(String(m?.dataJson || '{}'))
-      setActivePayload(payload)
-      setActiveLoading(false)
+      try {
+        const m = await appService.customers.getMeasurement(cid, g)
+        setActivePayload(parsePayloadJson(String(m?.dataJson || '{}')))
+      } catch {
+        const unit = (customer?.preferredUnit === 'CM' ? 'CM' : 'INCH') as 'INCH' | 'CM'
+        setActivePayload({ unit, values: {} })
+      } finally {
+        setActiveLoading(false)
+      }
     },
-    [cid]
+    [cid, customer?.preferredUnit]
   )
 
   useEffect(() => {
@@ -286,14 +293,22 @@ export default memo(function CustomerPage() {
       return
     }
     try {
-      await appService.customers.saveMeasurement(cid, g, { unit: activePayload.unit, values: activePayload.values })
+      const saved = await appService.customers.saveMeasurement(cid, g, {
+        unit: activePayload.unit,
+        values: activePayload.values,
+      })
+      if (saved?.dataJson) {
+        setActivePayload(parsePayloadJson(String(saved.dataJson)))
+      } else {
+        await loadMeasurement(g)
+      }
       toast.success('Measurements saved')
     } catch {
       toast.error('Could not save measurements. Please try again.')
     } finally {
       setSavingMeasurements(false)
     }
-  }, [activeFields, activeGarment, activePayload, cid, savingMeasurements, toast])
+  }, [activeFields, activeGarment, activePayload, cid, loadMeasurement, savingMeasurements, toast])
 
   const saveCustomerDetails = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -332,12 +347,18 @@ export default memo(function CustomerPage() {
       address: String(fd.get('address') || ''),
       preferredUnit: String(fd.get('preferredUnit') || 'INCH'),
     }
-    let created: any
+    let created: { id?: string; _id?: string } | null = null
     try {
       created = await appService.customers.create(body)
     } catch (err: any) {
       const msg = err?.payload?.message || err?.payload?.error || err?.message
       toast.error(msg ? String(msg) : 'Could not save customer. Please try again.')
+      setCreatingCustomer(false)
+      return
+    }
+    const newCustomerId = idFromApi(created)
+    if (!newCustomerId) {
+      toast.error('Customer saved but id was missing. Open the customer from the list.')
       setCreatingCustomer(false)
       return
     }
@@ -347,14 +368,15 @@ export default memo(function CustomerPage() {
       const hasAny = Object.keys(d.values || {}).some((k) => d.values[k] && String(d.values[k]).trim() !== '')
       if (!hasAny) continue
       try {
-        await appService.customers.saveMeasurement(created.id, g, { unit: d.unit, values: d.values })
+        await appService.customers.saveMeasurement(newCustomerId, g, { unit: d.unit, values: d.values })
       } catch {
         failed.push(g)
       }
     }
     if (failed.length) toast.error(`Customer saved. Could not save measurements for: ${failed.join(', ')}.`)
     else toast.success('Customer saved')
-    nav(`/app/customer?id=${created.id}`)
+    publishCustomersChanged({ customerId: newCustomerId, action: 'created' })
+    nav(`/app/customer?id=${newCustomerId}`)
     setCreatingCustomer(false)
   }, [creatingCustomer, nav, newDraft, toast])
 

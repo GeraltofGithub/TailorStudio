@@ -6,6 +6,7 @@ import { useAppToast } from '../utils/toast'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
+import { appService } from '../services/appService'
 import * as authOtp from '../services/api/authOtpApi/authOtpApi'
 import tailorLogo from '../assets/tailor-logo.png'
 import { LoginIntroSequence } from '../components/LoginIntroSequence'
@@ -32,7 +33,7 @@ export default memo(function LoginPage() {
   const [emailInput, setEmailInput] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
-  const [pendingToken, setPendingToken] = useState<string | null>(null)
+  const loginPasswordRef = useRef('')
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null)
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', ''])
   const [now, setNow] = useState(() => Date.now())
@@ -97,17 +98,28 @@ export default memo(function LoginPage() {
     return Math.max(0, Math.ceil((t - Date.now()) / 1000))
   }, [otpExpiresAt, now])
 
+  const backToCredentials = useCallback(() => {
+    challengeAbortRef.current?.abort()
+    setPhase('credentials')
+    loginPasswordRef.current = ''
+    setOtpExpiresAt(null)
+    setStaticOtpMode(false)
+    setOtpDigits(['', '', '', '', '', ''])
+  }, [])
+
   const resendOtp = useCallback(async () => {
-    if (pending || !pendingToken) return
+    if (pending || !loginPasswordRef.current) return
     setPending(true)
     try {
-      const r = await authOtp.otpLoginResend(pendingToken)
+      const r = await authOtp.otpLoginResend(loginEmail.trim(), loginPasswordRef.current)
       setOtpExpiresAt(r.expiresAt)
       setOtpDigits(['', '', '', '', '', ''])
       toast.success('New code sent. Check your inbox.')
     } catch (e: any) {
-      if (e?.status === 400) toast.error('Session expired. Sign in again.')
-      else if (e?.status === 503) {
+      if (e?.payload?.error === 'invalid_pending' || e?.status === 400) {
+        toast.error('Session expired. Sign in with email and password again.')
+        backToCredentials()
+      } else if (e?.status === 503) {
         if (e?.payload?.error === 'mail_send_failed') {
           toast.error('Could not send the email. Check EMAIL / EMAIL_PASSWORD on the server.')
         } else {
@@ -117,10 +129,10 @@ export default memo(function LoginPage() {
     } finally {
       setPending(false)
     }
-  }, [pending, pendingToken, toast])
+  }, [pending, loginEmail, toast, backToCredentials])
 
   const verifyOtpLogin = useCallback(async () => {
-    if (pending || !pendingToken) return
+    if (pending || !loginPasswordRef.current) return
     const code = padOtp(otpDigits).join('')
     if (code.length !== 6) {
       toast.error('Enter the 6-digit code.')
@@ -132,43 +144,38 @@ export default memo(function LoginPage() {
     }
     setPending(true)
     try {
-      await triggerBackendWarmup()
-      console.log('[LOGIN] Verifying OTP...')
-      const me = await authOtp.otpLoginVerify(loginEmail.trim(), code, pendingToken)
-      console.log('[LOGIN] OTP Verified successfully. Calling refreshMe...')
+      if (!staticOtpMode) await triggerBackendWarmup()
+      const me = await authOtp.otpLoginComplete(loginEmail.trim(), loginPasswordRef.current, code)
       const ok = await refreshMe({ silent: true, initialMe: me })
-      console.log(`[LOGIN] refreshMe returned: ${ok}`)
       if (!ok) {
-        console.warn('[LOGIN] refreshMe failed. Could not complete sign-in.')
         toast.error('Could not complete sign-in.')
         return
       }
-      console.log('[LOGIN] Auth is ready. Preparing redirect to /app/dashboard.')
       resetSessionReadCaches()
+      void appService.dashboard.summary().catch(() => null)
+      void appService.customers.listActive().catch(() => null)
       try {
         sessionStorage.setItem('ts_login_success', '1')
       } catch {
         // ignore
       }
-      console.log('[LOGIN] Navigating to /app/dashboard')
       nav('/app/dashboard', { replace: true })
     } catch (e: any) {
-      console.error('[LOGIN] OTP Verification failed with error:', e)
-      if (e?.payload?.error === 'invalid_otp' || e?.status === 400) toast.error('Invalid code.')
-      else toast.error(e?.message || 'Verification failed.')
+      if (e?.payload?.error === 'invalid_pending') {
+        toast.error('Session expired (server restarted?). Sign in with email and password again.')
+        backToCredentials()
+      } else if (e?.payload?.error === 'business_not_found' || e?.payload?.error === 'legacy_data') {
+        toast.error('Account data issue. Contact support or re-register.')
+      } else if (e?.payload?.error === 'user_not_found') {
+        toast.error('User record not found. Try signing up again.')
+        backToCredentials()
+      } else if (e?.payload?.error === 'invalid_otp' || e?.status === 400) {
+        toast.error(e?.payload?.message || (staticOtpMode ? 'Invalid code (dev: 112233).' : 'Invalid code.'))
+      } else toast.error(e?.message || 'Verification failed.')
     } finally {
       setPending(false)
     }
-  }, [nav, otpDigits, loginEmail, otpExpiredEffective, pending, pendingToken, refreshMe, toast])
-
-  const backToCredentials = useCallback(() => {
-    challengeAbortRef.current?.abort()
-    setPhase('credentials')
-    setPendingToken(null)
-    setOtpExpiresAt(null)
-    setStaticOtpMode(false)
-    setOtpDigits(['', '', '', '', '', ''])
-  }, [])
+  }, [nav, otpDigits, loginEmail, otpExpiredEffective, pending, refreshMe, staticOtpMode, toast, backToCredentials])
 
   return (
     <div className="auth-with-header">
@@ -212,21 +219,18 @@ export default memo(function LoginPage() {
                 const mySeq = ++challengeSeqRef.current
                 setPending(true)
                 try {
-                  console.log(`[LOGIN] Submitting credentials for ${email}`)
                   await triggerBackendWarmup(ac.signal)
                   const r = await authOtp.otpLoginChallenge(email, password, { signal: ac.signal })
-                  console.log('[LOGIN] Challenge received. Proceeding to OTP phase.')
                   if (mySeq !== challengeSeqRef.current) return
-                  setLoginEmail(email)
+                  setLoginEmail(r.email?.trim() || email)
+                  loginPasswordRef.current = password
                   setPasswordInput('')
-                  setPendingToken(r.pendingToken)
                   setOtpExpiresAt(r.expiresAt)
                   setStaticOtpMode(r.staticOtp === true)
                   setOtpDigits(['', '', '', '', '', ''])
                   setPhase('otp')
                   toast.success(r.staticOtp === true ? 'Enter your sign-in code.' : 'Code sent. Check your inbox.')
                 } catch (err: any) {
-                  console.error('[LOGIN] Credentials submit failed:', err)
                   if (err?.name === 'AbortError' || ac.signal.aborted) return
                   const code = err?.payload?.error
                   if (err?.status === 404 && code === 'no_account') toast.error('Account does not exist.')

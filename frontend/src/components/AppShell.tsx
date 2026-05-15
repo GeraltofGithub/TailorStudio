@@ -52,7 +52,7 @@ export const AppShell = memo(function AppShell() {
   useEffect(() => {
     if (state.status !== 'authed') return
     const run = () => {
-      void appService.dashboard.stats().catch(() => null)
+      void appService.dashboard.summary().catch(() => null)
       void appService.customers.list().catch(() => null)
       void appService.orders.list().catch(() => null)
       void appService.team.list().catch(() => null)

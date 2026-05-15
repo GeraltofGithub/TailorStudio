@@ -1,13 +1,14 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { onCustomersChanged, onOrdersChanged } from '../../services/businessRealtime'
 import { Pagination } from '../../components/Pagination'
 import { useAppToast } from '../../utils/toast'
 import { Eye, ShieldCheck, ShieldOff } from 'lucide-react'
 
 type Customer = {
-  id: number
+  id: string
   name: string
   phone: string
   address?: string | null
@@ -24,17 +25,31 @@ export default memo(function CustomersPage() {
   const [page, setPage] = useState(1)
   const pageSize = 15
 
+  const refreshList = useCallback(async () => {
+    const data = (await appService.customers.list(q || undefined)) as Customer[]
+    setList(data || [])
+  }, [q])
+
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const data = (await appService.customers.list(q || undefined)) as Customer[]
       if (!alive) return
-      setList(data || [])
+      await refreshList()
     })()
     return () => {
       alive = false
     }
-  }, [q])
+  }, [refreshList])
+
+  useEffect(() => {
+    const bump = () => void refreshList()
+    const offC = onCustomersChanged(bump)
+    const offO = onOrdersChanged(bump)
+    return () => {
+      offC()
+      offO()
+    }
+  }, [refreshList])
 
   useEffect(() => {
     setPage(1)

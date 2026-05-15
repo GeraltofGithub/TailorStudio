@@ -6,6 +6,13 @@ import { authApi } from '../services/api/authApi/authApi'
 import { resetSessionReadCaches } from '../services/api/resetSessionReadCaches'
 import { authService } from '../services/authService'
 import { clearAccessToken } from '../utils/authToken'
+import { handleRealtimeMessage } from '../services/businessRealtime'
+import {
+  connectSessionSocket,
+  disconnectSessionSocket,
+  onSessionSocket,
+  pingSessionSocket,
+} from '../utils/sessionSocket'
 
 type AuthState =
   | { status: 'loading'; me: null }
@@ -33,6 +40,7 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
   const clearAuth = useCallback(() => {
     refreshGenRef.current += 1
     authApi.cancelPendingMe()
+    disconnectSessionSocket()
     clearAccessToken()
     resetSessionReadCaches()
     setState({ status: 'anon', me: null })
@@ -81,49 +89,58 @@ export const AuthProvider = memo(function AuthProvider({ children }: { children:
       startTransition(() => setState({ status: 'anon', me: null }))
       return false
     }
-  }, [])
+  }, [clearAuth])
 
   useEffect(() => {
     void refreshMe()
   }, [refreshMe])
 
   useEffect(() => {
-    if (state.status !== 'authed') return
-
-    const tick = () => {
-      void refreshMe({ silent: true })
+    if (state.status !== 'authed') {
+      disconnectSessionSocket()
+      return
     }
 
+    connectSessionSocket()
+    const off = onSessionSocket((msg) => {
+      if (msg.type === 'session:logout') {
+        clearAuth()
+        window.dispatchEvent(new CustomEvent('auth:logout'))
+        return
+      }
+      if (msg.type === 'session:ok' && msg.me) {
+        startTransition(() => setState({ status: 'authed', me: msg.me as MeResponse }))
+        return
+      }
+      if (msg.type === 'session:ready') return
+      handleRealtimeMessage(msg as { type: string; orderId?: string; customerId?: string; action?: string })
+    })
+
     let debounceT: ReturnType<typeof setTimeout> | null = null
-    const debouncedTick = () => {
+    const ping = () => {
       if (debounceT) window.clearTimeout(debounceT)
       debounceT = window.setTimeout(() => {
         debounceT = null
-        tick()
-      }, 1200)
+        pingSessionSocket()
+      }, 800)
     }
-
-    const onFocus = () => debouncedTick()
+    const onFocus = () => ping()
     const onVis = () => {
-      if (document.visibilityState === 'visible') debouncedTick()
+      if (document.visibilityState === 'visible') ping()
     }
-
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVis)
+    const heartbeat = window.setInterval(pingSessionSocket, 60_000)
 
-    // Keep session fresh / detect server-side revocation.
-    const startDelay = window.setTimeout(() => {
-      tick()
-    }, 8000)
-    const t = window.setInterval(tick, 15000)
     return () => {
+      off()
+      disconnectSessionSocket()
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVis)
       if (debounceT) window.clearTimeout(debounceT)
-      window.clearTimeout(startDelay)
-      window.clearInterval(t)
+      window.clearInterval(heartbeat)
     }
-  }, [refreshMe, state.status])
+  }, [clearAuth, state.status])
 
   // If any API call returns 401, our API client dispatches 'auth:logout'.
   // Listen once and immediately clear local auth so AppShell redirects to /login.

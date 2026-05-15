@@ -6,7 +6,7 @@ export type MeResponse = {
   email?: string
   fullName: string
   role: UserRole
-  businessId: number
+  businessId: string
   businessName: string
   tagline?: string | null
   address?: string | null

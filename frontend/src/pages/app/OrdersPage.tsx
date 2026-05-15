@@ -1,11 +1,12 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { onOrdersChanged } from '../../services/businessRealtime'
 import { Pagination } from '../../components/Pagination'
 
 type OrderRow = {
-  id: number
+  id: string
   serialNumber: number
   garmentType: string
   orderDate: string
@@ -31,17 +32,23 @@ export default memo(function OrdersPage() {
   const [page, setPage] = useState(1)
   const pageSize = 15
 
+  const refreshOrders = useCallback(async () => {
+    const data = (await appService.orders.list()) as unknown as OrderRow[]
+    setOrders(data || [])
+  }, [])
+
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const data = (await appService.orders.list()) as unknown as OrderRow[]
       if (!alive) return
-      setOrders(data || [])
+      await refreshOrders()
     })()
     return () => {
       alive = false
     }
-  }, [])
+  }, [refreshOrders])
+
+  useEffect(() => onOrdersChanged(() => void refreshOrders()), [refreshOrders])
 
   const rows = useMemo(() => orders, [orders])
   const pagedRows = useMemo(() => {

@@ -5,7 +5,7 @@ import { TtlDedupeCache } from '../ttlDedupeCache'
 export type OrderLine = { description: string; rate: number; amount: number }
 
 export type Order = {
-  id: number
+  id: string
   serialNumber: number
   garmentType: string
   orderDate: string
@@ -13,7 +13,7 @@ export type Order = {
   status: string
   totalAmount: number
   advanceAmount: number
-  customer: { id: number; name: string; phone?: string }
+  customer: { id: string; name: string; phone?: string }
   lines: OrderLine[]
   notes?: string
   materialsNotes?: string
@@ -57,12 +57,12 @@ class OrdersApi {
 
   private readonly _url = {
     LIST: '/api/orders',
-    ONE: (id: number) => `/api/orders/${id}`,
-    PAY_INFO: (id: number) => `/api/orders/${id}/payments/info`,
-    PAY_CASH: (id: number) => `/api/orders/${id}/payments/cash`,
-    PAY_MARK: (id: number) => `/api/orders/${id}/payments/mark-paid`,
-    PAY_PP_INIT: (id: number) => `/api/orders/${id}/payments/phonepe/initiate`,
-    PAY_PP_SYNC: (id: number) => `/api/orders/${id}/payments/phonepe/sync`,
+    ONE: (id: string) => `/api/orders/${id}`,
+    PAY_INFO: (id: string) => `/api/orders/${id}/payments/info`,
+    PAY_CASH: (id: string) => `/api/orders/${id}/payments/cash`,
+    PAY_MARK: (id: string) => `/api/orders/${id}/payments/mark-paid`,
+    PAY_PP_INIT: (id: string) => `/api/orders/${id}/payments/phonepe/initiate`,
+    PAY_PP_SYNC: (id: string) => `/api/orders/${id}/payments/phonepe/sync`,
   } as const
 
   invalidateAllReadCaches() {
@@ -78,52 +78,60 @@ class OrdersApi {
     invalidateDashboardAndCustomerOrderCaches()
   }
 
+  invalidateOrderCache(id: string) {
+    this._getCache.delete(`orders:get:${id}`)
+    this._payInfoCache.delete(`orders:payinfo:${id}`)
+  }
+
   list() {
     return this._listCache.load('orders:list', () => api._get<Order[]>(this._url.LIST), cloneOrdersList)
   }
 
-  get(id: number) {
+  get(id: string) {
     const key = `orders:get:${id}`
     return this._getCache.load(key, () => api._get<Order>(this._url.ONE(id)), cloneOrder)
   }
 
   create(data: any) {
     this.invalidateListCache()
-    return api._post<Order>(this._url.LIST, data)
+    return api._post<Order>(this._url.LIST, data).then((o) => {
+      if (o?.id) this.invalidateOrderCache(String(o.id))
+      return o
+    })
   }
 
-  update(id: number, data: any) {
+  update(id: string, data: any) {
     this.invalidateListCache()
-    this._payInfoCache.delete(`orders:payinfo:${id}`)
+    this.invalidateOrderCache(id)
     return api._put<Order>(this._url.ONE(id), data)
   }
 
-  paymentInfo(id: number) {
+  paymentInfo(id: string) {
     const key = `orders:payinfo:${id}`
     return this._payInfoCache.load(key, () => api._get<any>(this._url.PAY_INFO(id)), cloneJsonish)
   }
 
-  payCash(id: number, amount: number) {
+  payCash(id: string, amount: number) {
     this.invalidateListCache()
-    this._payInfoCache.delete(`orders:payinfo:${id}`)
+    this.invalidateOrderCache(id)
     return api._post<Order>(this._url.PAY_CASH(id), { amount })
   }
 
-  markPaid(id: number) {
+  markPaid(id: string) {
     this.invalidateListCache()
-    this._payInfoCache.delete(`orders:payinfo:${id}`)
+    this.invalidateOrderCache(id)
     return api._post<Order>(this._url.PAY_MARK(id), {})
   }
 
-  phonePeInitiate(id: number) {
+  phonePeInitiate(id: string) {
     this.invalidateListCache()
-    this._payInfoCache.delete(`orders:payinfo:${id}`)
+    this.invalidateOrderCache(id)
     return api._post<{ redirectUrl?: string; error?: string }>(this._url.PAY_PP_INIT(id), {})
   }
 
-  phonePeSync(id: number) {
+  phonePeSync(id: string) {
     this.invalidateListCache()
-    this._payInfoCache.delete(`orders:payinfo:${id}`)
+    this.invalidateOrderCache(id)
     return api._post<Order>(this._url.PAY_PP_SYNC(id), {})
   }
 }

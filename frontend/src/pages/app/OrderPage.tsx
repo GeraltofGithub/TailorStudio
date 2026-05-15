@@ -2,8 +2,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { appService } from '../../services/appService'
+import { onOrdersChanged, publishOrdersChanged } from '../../services/businessRealtime'
+import { ordersApi } from '../../services/api/ordersApi/ordersApi'
 import { useAuth } from '../../context/AuthContext'
 import { orderSlipHtml, paymentReceiptHtml, printElement } from '../../utils/receipt'
+import { formatMoneyForInput, parseMoneyAmount, sanitizeMoneyInput } from '../../utils/moneyInput'
 import { useAppToast } from '../../utils/toast'
 
 type Garment = 'SHIRT' | 'PANT' | 'BLOUSE' | 'SUIT' | 'KURTA' | 'SHERWANI' | 'INDO_WESTERN' | 'NEHRU_JACKET' | 'WAISTCOAT' | 'JODHPURI'
@@ -120,7 +123,7 @@ export default memo(function OrderPage() {
   const { state } = useAuth()
   const [sp] = useSearchParams()
   const nav = useNavigate()
-  const oid = sp.get('id') ? Number(sp.get('id')) : null
+  const oid = sp.get('id') || null
   const toast = useAppToast()
 
   const [existingOrder, setExistingOrder] = useState<any | null>(null)
@@ -167,6 +170,7 @@ export default memo(function OrderPage() {
   const receiptPayRef = useRef<HTMLDivElement | null>(null)
   const orderSlipRef = useRef<HTMLDivElement | null>(null)
   const savingRef = useRef(false)
+  const moneyFieldFocusRef = useRef(false)
 
   const studio = useMemo(() => {
     if (state.status !== 'authed') return { name: 'Tailor Studio', tagline: '', phone: '', address: '' }
@@ -174,31 +178,74 @@ export default memo(function OrderPage() {
     return { name: me.businessName || 'Tailor Studio', tagline: me.tagline || '', phone: me.phone || '', address: me.address || '' }
   }, [state])
 
+  const applyOrderResponse = useCallback((o: any) => {
+    if (!o) return
+    setExistingOrder(o)
+    setOrderMissing(false)
+    const snap = parseSnapFromOrder(o)
+    setSnapCache(snap)
+    if (isMeasurementPayload(snap)) {
+      setSnapPreview(JSON.stringify(snap, null, 2))
+    } else {
+      setSnapPreview('')
+    }
+  }, [])
+
+  const loadPaymentInfo = useCallback(async (orderId?: string | null) => {
+    const id = orderId ?? oid
+    if (!id) return
+    try {
+      setPaymentInfo(await appService.orders.paymentInfo(id))
+    } catch {
+      // ignore
+    }
+  }, [oid])
+
+  const reloadOrder = useCallback(
+    async (orderId?: string | null) => {
+      const id = orderId ?? oid
+      if (!id) return
+      ordersApi.invalidateOrderCache(id)
+      try {
+        const o = await appService.orders.get(id)
+        applyOrderResponse(o)
+        await loadPaymentInfo(id)
+      } catch {
+        setOrderMissing(true)
+      }
+    },
+    [applyOrderResponse, loadPaymentInfo, oid],
+  )
+
   useEffect(() => {
+    if (!oid) {
+      setExistingOrder(null)
+      setOrderMissing(false)
+      return
+    }
     let alive = true
     ;(async () => {
-      if (!oid) return
-      if (!alive) return
       try {
         const o = await appService.orders.get(oid)
         if (!alive) return
-        setExistingOrder(o)
-        const snap = parseSnapFromOrder(o)
-        setSnapCache(snap)
-        if (isMeasurementPayload(snap)) {
-          setSnapPreview(JSON.stringify(snap, null, 2))
-        } else {
-          setSnapPreview('')
-        }
+        applyOrderResponse(o)
+        await loadPaymentInfo(oid)
       } catch {
+        if (!alive) return
         setOrderMissing(true)
-        return
       }
     })()
     return () => {
       alive = false
     }
-  }, [oid])
+  }, [oid, applyOrderResponse, loadPaymentInfo])
+
+  useEffect(() => {
+    return onOrdersChanged((detail) => {
+      if (!oid || !detail.orderId || String(detail.orderId) !== oid) return
+      void reloadOrder(oid)
+    })
+  }, [oid, reloadOrder])
 
   useEffect(() => {
     let alive = true
@@ -232,19 +279,20 @@ export default memo(function OrderPage() {
   useEffect(() => {
     const existing = existingOrder
     if (!existing) return
+    if (moneyFieldFocusRef.current) return
     setCustomerId(existing?.customer?.id != null ? String(existing.customer.id) : '')
     setGarmentType(existing.garmentType || 'SHIRT')
     setOrderDate(isoDate(existing.orderDate))
     setDeliveryDate(isoDate(existing.deliveryDate))
     setStatus(existing.status || 'PENDING')
-    setAdvance(String(existing.advanceAmount ?? 0))
+    setAdvance(formatMoneyForInput(existing.advanceAmount ?? 0))
     setNotes(existing.notes || '')
     setMatNotes(existing.materialsNotes || '')
     setDemNotes(existing.demandsNotes || '')
 
     const lines = existing.lines && existing.lines.length ? existing.lines : []
     const totalEst = lines.reduce((s: number, ln: any) => s + (Number(ln.amount) || 0), 0)
-    setBillTotal(totalEst > 0 ? String(totalEst) : '')
+    setBillTotal(totalEst > 0 ? formatMoneyForInput(totalEst) : '')
     let d = lines[0] && lines[0].description ? lines[0].description : ''
     if (lines.length > 2) d = d ? `${d} (+ more lines)` : 'Combined charges'
     setBillDesc(d)
@@ -254,7 +302,7 @@ export default memo(function OrderPage() {
       setExtraEnabled(true)
       setExtraDesc(extraLine.description || '')
       const ea = Number(extraLine.amount) || 0
-      setExtraAmt(ea > 0 ? String(ea) : '')
+      setExtraAmt(ea > 0 ? formatMoneyForInput(ea) : '')
     }
   }, [existingOrder])
 
@@ -281,12 +329,12 @@ export default memo(function OrderPage() {
 
   const gatherLines = useCallback(() => {
     const g = garmentType
-    const main = parseFloat(billTotal) || 0
+    const main = parseMoneyAmount(billTotal)
     const desc = billDesc.trim() || `${g} — tailoring`
     const out: any[] = [{ description: desc, rate: main, amount: main }]
     if (extraEnabled) {
       const ed = extraDesc.trim()
-      const ea = parseFloat(extraAmt) || 0
+      const ea = parseMoneyAmount(extraAmt)
       if (ed && ea > 0) out.push({ description: ed, rate: ea, amount: ea })
     }
     return out
@@ -295,7 +343,7 @@ export default memo(function OrderPage() {
   const totals = useMemo(() => {
     const lines = gatherLines()
     const sum = lines.reduce((s: number, ln: any) => s + (Number(ln.amount) || 0), 0)
-    const adv = parseFloat(advance) || 0
+    const adv = parseMoneyAmount(advance)
     const bal = Math.max(0, sum - adv)
     return { lines, sum, adv, bal }
   }, [advance, gatherLines])
@@ -372,15 +420,6 @@ export default memo(function OrderPage() {
     renderReceipts()
   }, [renderReceipts])
 
-  const loadPaymentInfo = useCallback(async () => {
-    if (!oid) return
-    try {
-      setPaymentInfo(await appService.orders.paymentInfo(oid))
-    } catch {
-      // ignore
-    }
-  }, [oid])
-
   useEffect(() => {
     void loadPaymentInfo()
   }, [loadPaymentInfo])
@@ -402,7 +441,7 @@ export default memo(function OrderPage() {
     if (pullingMeasurements) return
     setPullingMeasurements(true)
     try {
-      const m = await appService.customers.getMeasurement(Number(customerId), garmentType)
+      const m = await appService.customers.getMeasurement(customerId, garmentType)
       const payload = parsePayloadJson(String(m?.dataJson || '{}'))
       if (!hasAnyValues(payload)) {
         setMeasureDraft(payload)
@@ -460,7 +499,7 @@ export default memo(function OrderPage() {
       toast.error('Select a customer.')
       return
     }
-    const totalNum = parseFloat(billTotal)
+    const totalNum = parseMoneyAmount(billTotal)
     if (!Number.isFinite(totalNum) || totalNum <= 0) {
       toast.error('Enter total charge (must be greater than 0).')
       return
@@ -482,13 +521,13 @@ export default memo(function OrderPage() {
     setSaving(true)
 
     const body = {
-      customerId: parseInt(customerId, 10),
+      customerId,
       garmentType,
       measurementSnapshot: snap,
       orderDate,
       deliveryDate,
       status,
-      advanceAmount: parseFloat(advance) || 0,
+      advanceAmount: parseMoneyAmount(advance),
       notes,
       materialsNotes: matNotes || '',
       demandsNotes: demNotes || '',
@@ -502,11 +541,16 @@ export default memo(function OrderPage() {
         // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
         if (pendingProfileSave && isMeasurementPayload(snap)) {
           await appService.customers
-            .saveMeasurement(Number(customerId), garmentType, { unit: snap.unit, values: snap.values })
+            .saveMeasurement(customerId, garmentType, { unit: snap.unit, values: snap.values })
             .catch(() => null)
           setPendingProfileSave(false)
         }
-        nav(`/app/order?id=${(data as any).id}`)
+        const newId = String((data as any).id)
+        ordersApi.invalidateOrderCache(newId)
+        applyOrderResponse(data)
+        nav(`/app/order?id=${newId}`, { replace: true })
+        await loadPaymentInfo(newId)
+        publishOrdersChanged({ orderId: newId, action: 'created' })
         toast.success('Order created')
         const st = (data as any)?.status as Status | undefined
         if (st === 'IN_PROGRESS') toast.success('Work status: In progress')
@@ -515,9 +559,9 @@ export default memo(function OrderPage() {
         savingRef.current = false
         return
       }
-      setExistingOrder(data)
-      setSnapCache(parseSnapFromOrder(data))
-      await loadPaymentInfo()
+      applyOrderResponse(data)
+      await loadPaymentInfo(oid)
+      publishOrdersChanged({ orderId: oid, action: 'updated' })
       toast.success('Order updated')
       const afterStatus = (data as any)?.status as Status | undefined
       if (afterStatus && afterStatus !== beforeStatus) {
@@ -528,7 +572,7 @@ export default memo(function OrderPage() {
       // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
       if (pendingProfileSave && isMeasurementPayload(snap)) {
         await appService.customers
-          .saveMeasurement(Number(customerId), garmentType, { unit: snap.unit, values: snap.values })
+          .saveMeasurement(customerId, garmentType, { unit: snap.unit, values: snap.values })
           .catch(() => null)
         setPendingProfileSave(false)
       }
@@ -547,6 +591,7 @@ export default memo(function OrderPage() {
     garmentType,
     billTotal,
     gatherLines,
+    applyOrderResponse,
     existingOrder?.status,
     isCompleted,
     loadPaymentInfo,
@@ -710,13 +755,19 @@ export default memo(function OrderPage() {
                   </label>
                   <input
                     id="adv"
-                    type="number"
-                    step="0.01"
-                    min={0}
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
                     value={advance}
                     placeholder="0"
                     disabled={isCompleted}
-                    onChange={(e) => setAdvance(e.target.value)}
+                    onFocus={() => {
+                      moneyFieldFocusRef.current = true
+                    }}
+                    onBlur={() => {
+                      moneyFieldFocusRef.current = false
+                    }}
+                    onChange={(e) => setAdvance(sanitizeMoneyInput(e.target.value))}
                   />
                 </div>
               </div>
@@ -733,13 +784,19 @@ export default memo(function OrderPage() {
                       </label>
                       <input
                         id="bill-total"
-                        type="number"
-                        step="0.01"
-                        min={0}
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
                         value={billTotal}
                         placeholder="e.g. 1500"
                         disabled={isCompleted}
-                        onChange={(e) => setBillTotal(e.target.value)}
+                        onFocus={() => {
+                          moneyFieldFocusRef.current = true
+                        }}
+                        onBlur={() => {
+                          moneyFieldFocusRef.current = false
+                        }}
+                        onChange={(e) => setBillTotal(sanitizeMoneyInput(e.target.value))}
                       />
                     </div>
                     <div>
@@ -780,12 +837,18 @@ export default memo(function OrderPage() {
                         <label>Extra amount (₹)</label>
                         <input
                           id="extra-amt"
-                          type="number"
-                          step="0.01"
-                          min={0}
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
                           value={extraAmt}
                           disabled={isCompleted}
-                          onChange={(e) => setExtraAmt(e.target.value)}
+                          onFocus={() => {
+                            moneyFieldFocusRef.current = true
+                          }}
+                          onBlur={() => {
+                            moneyFieldFocusRef.current = false
+                          }}
+                          onChange={(e) => setExtraAmt(sanitizeMoneyInput(e.target.value))}
                         />
                       </div>
                     </div>
@@ -875,10 +938,9 @@ export default memo(function OrderPage() {
                               if (syncingPhonePe) return
                               setSyncingPhonePe(true)
                               try {
-                                const data = await appService.orders.phonePeSync(oid)
-                                setExistingOrder(data)
-                                setAdvance(String((data as any).advanceAmount))
-                                await loadPaymentInfo()
+                                await appService.orders.phonePeSync(oid)
+                                await reloadOrder(oid)
+                                publishOrdersChanged({ orderId: oid, action: 'payment' })
                                 toast.success('Payment status synced')
                               } catch (e: any) {
                                 const msg = e?.payload?.error || e?.payload?.message || e?.message
@@ -1053,7 +1115,14 @@ export default memo(function OrderPage() {
                   Balance due: <strong id="pay-bal-due">₹ {totals.bal.toFixed(2)}</strong>
                 </p>
                 <label>Amount received (₹)</label>
-                <input id="pay-cash-amt" type="number" step="0.01" min={0} value={payCashAmt} onChange={(e) => setPayCashAmt(e.target.value)} />
+                <input
+                  id="pay-cash-amt"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={payCashAmt}
+                  onChange={(e) => setPayCashAmt(sanitizeMoneyInput(e.target.value))}
+                />
                 <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <button
                     type="button"
@@ -1063,18 +1132,17 @@ export default memo(function OrderPage() {
                     onClick={async () => {
                       if (!oid) return
                       if (recordingCash) return
-                      const amt = parseFloat(payCashAmt)
+                      const amt = parseMoneyAmount(payCashAmt)
                       if (!amt || amt <= 0) {
                         toast.error('Enter the cash amount received.')
                         return
                       }
                       setRecordingCash(true)
                       try {
-                        const data = await appService.orders.payCash(oid, amt)
-                        setExistingOrder(data)
-                        setAdvance(String((data as any).advanceAmount))
+                        await appService.orders.payCash(oid, amt)
                         setPayModalOpen(false)
-                        await loadPaymentInfo()
+                        await reloadOrder(oid)
+                        publishOrdersChanged({ orderId: oid, action: 'payment' })
                         toast.success('Cash payment recorded')
                       } catch (e: any) {
                         const msg = e?.payload?.error || e?.payload?.message || e?.message
@@ -1179,11 +1247,10 @@ export default memo(function OrderPage() {
                   if (markingPaid) return
                   setMarkingPaid(true)
                   try {
-                    const data = await appService.orders.markPaid(oid)
-                    setExistingOrder(data)
-                    setAdvance(String((data as any).advanceAmount))
+                    await appService.orders.markPaid(oid)
                     setMarkPaidConfirmOpen(false)
-                    await loadPaymentInfo()
+                    await reloadOrder(oid)
+                    publishOrdersChanged({ orderId: oid, action: 'payment' })
                     toast.success('Order marked as fully paid')
                   } catch (e: any) {
                     const msg = e?.payload?.error || e?.payload?.message || e?.message

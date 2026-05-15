@@ -17,7 +17,7 @@ export default memo(function PhonePeReturnPage() {
       }
       try {
         if (!alive) return
-        await appService.orders.phonePeSync(Number(orderId))
+        await appService.orders.phonePeSync(orderId)
         if (!alive) return
         setMsg('Payment synced. You can close this tab.')
       } catch {

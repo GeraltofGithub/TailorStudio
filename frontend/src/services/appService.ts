@@ -9,33 +9,34 @@ import { teamApi } from './api/teamApi/teamApi'
 class AppService {
   dashboard = {
     stats: () => dashboardApi.stats(),
+    summary: () => dashboardApi.summary(),
   }
 
   customers = {
     list: (q?: string) => customersApi.list(q),
     listActive: (q?: string) => customersApi.listActive(q),
-    get: (id: number) => customersApi.get(id),
+    get: (id: string) => customersApi.get(id),
     create: (data: Parameters<typeof customersApi.create>[0]) => customersApi.create(data),
-    update: (id: number, data: Parameters<typeof customersApi.update>[1]) => customersApi.update(id, data),
-    disable: (id: number) => customersApi.disable(id),
-    enable: (id: number) => customersApi.enable(id),
-    orders: (id: number) => customersApi.orders(id),
+    update: (id: string, data: Parameters<typeof customersApi.update>[1]) => customersApi.update(id, data),
+    disable: (id: string) => customersApi.disable(id),
+    enable: (id: string) => customersApi.enable(id),
+    orders: (id: string) => customersApi.orders(id),
     templates: () => customersApi.templates(),
-    getMeasurement: (id: number, garment: string) => customersApi.getMeasurement(id, garment),
-    saveMeasurement: (id: number, garment: string, data: Parameters<typeof customersApi.saveMeasurement>[2]) =>
+    getMeasurement: (id: string, garment: string) => customersApi.getMeasurement(id, garment),
+    saveMeasurement: (id: string, garment: string, data: Parameters<typeof customersApi.saveMeasurement>[2]) =>
       customersApi.saveMeasurement(id, garment, data),
   }
 
   orders = {
     list: () => ordersApi.list(),
-    get: (id: number) => ordersApi.get(id),
+    get: (id: string) => ordersApi.get(id),
     create: (data: any) => ordersApi.create(data),
-    update: (id: number, data: any) => ordersApi.update(id, data),
-    paymentInfo: (id: number) => ordersApi.paymentInfo(id),
-    payCash: (id: number, amount: number) => ordersApi.payCash(id, amount),
-    markPaid: (id: number) => ordersApi.markPaid(id),
-    phonePeInitiate: (id: number) => ordersApi.phonePeInitiate(id),
-    phonePeSync: (id: number) => ordersApi.phonePeSync(id),
+    update: (id: string, data: any) => ordersApi.update(id, data),
+    paymentInfo: (id: string) => ordersApi.paymentInfo(id),
+    payCash: (id: string, amount: number) => ordersApi.payCash(id, amount),
+    markPaid: (id: string) => ordersApi.markPaid(id),
+    phonePeInitiate: (id: string) => ordersApi.phonePeInitiate(id),
+    phonePeSync: (id: string) => ordersApi.phonePeSync(id),
   }
 
   team = {

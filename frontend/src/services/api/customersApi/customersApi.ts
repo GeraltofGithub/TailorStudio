@@ -3,7 +3,7 @@ import { runOrdersListInvalidator } from '../cacheHooks'
 import { TtlDedupeCache } from '../ttlDedupeCache'
 
 export type Customer = {
-  id: number
+  id: string
   name: string
   phone: string
   address?: string | null
@@ -32,23 +32,21 @@ function cloneTemplates(t: MeasurementTemplates): MeasurementTemplates {
 class CustomersApi {
   private readonly _cache = new TtlDedupeCache(45_000)
   private readonly _templatesCache = new TtlDedupeCache(120_000)
-  private readonly _measureCache = new TtlDedupeCache(25_000)
 
   private readonly _url = {
     LIST: '/api/customers',
     LIST_ACTIVE: '/api/customers/active',
-    ONE: (id: number) => `/api/customers/${id}`,
-    ORDERS: (id: number) => `/api/customers/${id}/orders`,
-    MEASURE: (id: number, garment: string) => `/api/customers/${id}/measurements/${garment}`,
-    DISABLE: (id: number) => `/api/customers/${id}/disable`,
-    ENABLE: (id: number) => `/api/customers/${id}/enable`,
+    ONE: (id: string) => `/api/customers/${id}`,
+    ORDERS: (id: string) => `/api/customers/${id}/orders`,
+    MEASURE: (id: string, garment: string) => `/api/customers/${id}/measurements/${encodeURIComponent(garment)}`,
+    DISABLE: (id: string) => `/api/customers/${id}/disable`,
+    ENABLE: (id: string) => `/api/customers/${id}/enable`,
     MEASURE_TEMPLATES: '/api/measurement-templates',
   } as const
 
   invalidateAllReadCaches() {
     this._cache.clear()
     this._templatesCache.clear()
-    this._measureCache.clear()
   }
 
   invalidateOrderHistoryCaches() {
@@ -72,7 +70,7 @@ class CustomersApi {
     return this._cache.load(key, () => api._get<Customer[]>(url), cloneCustomers)
   }
 
-  get(id: number) {
+  get(id: string) {
     const key = `customers:one:${id}`
     return this._cache.load(key, () => api._get<Customer>(this._url.ONE(id)), cloneCustomer)
   }
@@ -82,44 +80,45 @@ class CustomersApi {
     return api._post<Customer>(this._url.LIST, data)
   }
 
-  update(id: number, data: { name: string; phone: string; address: string; preferredUnit: string }) {
+  update(id: string, data: { name: string; phone: string; address: string; preferredUnit: string }) {
     this.invalidateCustomerListCaches()
     this._cache.delete(`customers:one:${id}`)
+    this._cache.deletePrefix(`customers:meas:${id}:`)
     runOrdersListInvalidator()
     return api._put<Customer>(this._url.ONE(id), data)
   }
 
-  disable(id: number) {
+  disable(id: string) {
     this.invalidateCustomerListCaches()
     this._cache.delete(`customers:one:${id}`)
     runOrdersListInvalidator()
     return api._post<Customer>(this._url.DISABLE(id), {})
   }
 
-  enable(id: number) {
+  enable(id: string) {
     this.invalidateCustomerListCaches()
     this._cache.delete(`customers:one:${id}`)
     runOrdersListInvalidator()
     return api._post<Customer>(this._url.ENABLE(id), {})
   }
 
-  orders(id: number) {
+  orders(id: string) {
     const key = `customers:orders:${id}`
     return this._cache.load(key, () => api._get<any[]>(this._url.ORDERS(id)), (rows) => (rows || []).map((o) => ({ ...o })))
   }
 
-  getMeasurement(id: number, garment: string) {
+  getMeasurement(id: string, garment: string) {
     const key = `customers:meas:${id}:${garment}`
     return this._cache.load(
       key,
-      () => api._get<{ dataJson: string }>(this._url.MEASURE(id, garment)),
+      () => api._get<{ dataJson: string; id?: string | null }>(this._url.MEASURE(id, garment)),
       (m) => ({ ...m }),
     )
   }
 
-  saveMeasurement(id: number, garment: string, data: { unit: string; values: Record<string, string> }) {
-    this._measureCache.delete(`customers:meas:${id}:${garment}`)
-    return api._put<{ ok?: boolean }>(this._url.MEASURE(id, garment), data)
+  saveMeasurement(id: string, garment: string, data: { unit: string; values: Record<string, string> }) {
+    this._cache.delete(`customers:meas:${id}:${garment}`)
+    return api._put<{ id?: string; dataJson: string }>(this._url.MEASURE(id, garment), data)
   }
 
   templates() {
