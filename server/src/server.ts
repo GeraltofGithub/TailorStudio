@@ -9,17 +9,22 @@ async function main() {
   await connectDatabase()
   const app = createApp()
   const server = http.createServer(app)
-  attachWebSocket(server)
-  startReminderJob()
-  server.on('error', (err: NodeJS.ErrnoException) => {
+
+  const onListenError = (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(
-        `[server] Port ${env.port} is already in use. Stop the other process or change PORT in server/.env`,
-      )
+      console.error(`[server] Port ${env.port} is already in use.`)
+      console.error(`[server] Windows: netstat -ano | findstr :${env.port}  then  taskkill /PID <pid> /F`)
+      console.error(`[server] Or stop the other terminal running nodemon / npm start.`)
       process.exit(1)
     }
     throw err
-  })
+  }
+  server.on('error', onListenError)
+
+  const wss = attachWebSocket(server)
+  wss.on('error', onListenError)
+
+  startReminderJob()
   server.listen(env.port, '0.0.0.0', () => {
     console.log(`[server] listening on 0.0.0.0:${env.port}  ws://0.0.0.0:${env.port}/ws`)
     if (env.corsOrigins.length) console.log(`[cors] allowed origins: ${env.corsOrigins.join(', ')}`)

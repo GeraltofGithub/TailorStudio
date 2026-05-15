@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon",
     "start": "tsx src/server.ts",
+    "go": "node --import tsx src/server.ts",
     "migrate:objectid": "node scripts/migrate-objectid-only.mjs"
   },
   "engines": {

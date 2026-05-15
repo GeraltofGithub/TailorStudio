@@ -49,4 +49,5 @@ export function attachWebSocket(server: Server) {
   })
 
   console.log('[ws] /ws ready')
+  return wss
 }
