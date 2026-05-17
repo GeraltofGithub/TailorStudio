@@ -4,6 +4,14 @@ import { parseObjectId } from '../utils/objectId.js'
 import { toApi, toApiList } from '../utils/apiJson.js'
 import { emitOrdersChanged } from '../ws/realtime.js'
 
+function getDdmmyy() {
+  const d = new Date()
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${dd}${mm}${yy}`
+}
+
 type LineDto = { description?: string; rate?: number; amount?: number }
 type OrderWrite = {
   customerId: string
@@ -54,7 +62,7 @@ export async function listOrders(businessId: string) {
   const bid = parseObjectId(businessId)
   const rows = await TailorOrder.find({ businessId: bid })
     .select(
-      '_id serialNumber customerId garmentType orderDate deliveryDate status totalAmount advanceAmount createdAt',
+      '_id displayId serialNumber customerId garmentType orderDate deliveryDate status totalAmount advanceAmount createdAt',
     )
     .sort({ createdAt: -1 })
     .lean()
@@ -67,7 +75,7 @@ export async function listOrders(businessId: string) {
           businessId: bid,
           _id: { $in: customerIds.map((id) => parseObjectId(id)) },
         })
-          .select('name phone')
+          .select('displayId serialNumber name phone')
           .lean()
       : []
   const cmap = new Map(
@@ -103,9 +111,14 @@ export async function createOrder(businessId: string, req: OrderWrite) {
   if (!customer) throw new Error('Invalid customer')
   const lines = applyLines(req.lines)
   const total = sumLines(lines)
+  
+  const serial = await nextSeq(`orderSerial:${businessId}`)
+  const displayId = `OD_${String(serial).padStart(3, '0')}_${getDdmmyy()}`
+
   const doc = await TailorOrder.create({
     businessId: bid,
-    serialNumber: await nextSeq(`orderSerial:${businessId}`),
+    serialNumber: serial,
+    displayId,
     customerId: parseObjectId(String(customer._id)),
     garmentType: req.garmentType,
     measurementSnapshotJson: JSON.stringify(req.measurementSnapshot ?? {}),

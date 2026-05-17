@@ -11,8 +11,8 @@ export default memo(function PaymentsPage() {
   const [sp] = useSearchParams()
   const selId = sp.get('id') || null
 
-  const [orders, setOrders] = useState<any[]>([])
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null)
+  const [orders, setOrders] = useState<any[]>(() => appService.orders.listSync() || [])
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(() => selId ? appService.orders.getSync(selId) || null : null)
 
   const rpRef = useRef<HTMLDivElement | null>(null)
   const roRef = useRef<HTMLDivElement | null>(null)

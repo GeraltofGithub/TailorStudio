@@ -10,8 +10,8 @@ type NavItem = { href: string; id: string; label: string; icon: string }
 
 const NAV: NavItem[] = [
   { href: '/app/dashboard', id: 'dashboard', label: 'Dashboard', icon: '◇' },
-  { href: '/app/customers', id: 'customers', label: 'Customers', icon: '◎' },
   { href: '/app/orders', id: 'orders', label: 'Orders', icon: '☰' },
+  { href: '/app/customers', id: 'customers', label: 'Customers', icon: '◎' },
   { href: '/app/payments', id: 'payments', label: 'Payments', icon: '₹' },
   { href: '/app/team', id: 'team', label: 'Team & code', icon: '✦' },
   { href: '/app/settings', id: 'settings', label: 'Studio', icon: '⚙' },

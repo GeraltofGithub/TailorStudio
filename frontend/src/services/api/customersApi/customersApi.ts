@@ -58,16 +58,31 @@ class CustomersApi {
     this._cache.deletePrefix('customers:active:')
   }
 
+  listSync(q?: string) {
+    const key = `customers:list:${q ?? ''}`
+    return this._cache.getSync<Customer[]>(key, cloneCustomers)
+  }
+
   list(q?: string) {
     const key = `customers:list:${q ?? ''}`
     const url = q ? `${this._url.LIST}?q=${encodeURIComponent(q)}` : this._url.LIST
     return this._cache.load(key, () => api._get<Customer[]>(url), cloneCustomers)
   }
 
+  listActiveSync(q?: string) {
+    const key = `customers:active:${q ?? ''}`
+    return this._cache.getSync<Customer[]>(key, cloneCustomers)
+  }
+
   listActive(q?: string) {
     const key = `customers:active:${q ?? ''}`
     const url = q ? `${this._url.LIST_ACTIVE}?q=${encodeURIComponent(q)}` : this._url.LIST_ACTIVE
     return this._cache.load(key, () => api._get<Customer[]>(url), cloneCustomers)
+  }
+
+  getSync(id: string) {
+    const key = `customers:one:${id}`
+    return this._cache.getSync<Customer>(key, cloneCustomer)
   }
 
   get(id: string) {

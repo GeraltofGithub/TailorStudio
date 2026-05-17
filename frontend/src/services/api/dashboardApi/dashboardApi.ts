@@ -51,6 +51,10 @@ class DashboardApi {
     )
   }
 
+  summarySync() {
+    return this._cache.getSync<DashboardSummary>('dashboard:summary', cloneSummary)
+  }
+
   summary() {
     return this._cache.load('dashboard:summary', () => api._get<DashboardSummary>(this._url.SUMMARY), cloneSummary)
   }

@@ -83,8 +83,17 @@ class OrdersApi {
     this._payInfoCache.delete(`orders:payinfo:${id}`)
   }
 
+  listSync() {
+    return this._listCache.getSync<Order[]>('orders:list', cloneOrdersList)
+  }
+
   list() {
     return this._listCache.load('orders:list', () => api._get<Order[]>(this._url.LIST), cloneOrdersList)
+  }
+
+  getSync(id: string) {
+    const key = `orders:get:${id}`
+    return this._getCache.getSync<Order>(key, cloneOrder)
   }
 
   get(id: string) {

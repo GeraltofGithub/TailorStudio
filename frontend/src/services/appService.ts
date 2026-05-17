@@ -10,12 +10,16 @@ class AppService {
   dashboard = {
     stats: () => dashboardApi.stats(),
     summary: () => dashboardApi.summary(),
+    summarySync: () => dashboardApi.summarySync(),
   }
 
   customers = {
     list: (q?: string) => customersApi.list(q),
+    listSync: (q?: string) => customersApi.listSync(q),
     listActive: (q?: string) => customersApi.listActive(q),
+    listActiveSync: (q?: string) => customersApi.listActiveSync(q),
     get: (id: string) => customersApi.get(id),
+    getSync: (id: string) => customersApi.getSync(id),
     create: (data: Parameters<typeof customersApi.create>[0]) => customersApi.create(data),
     update: (id: string, data: Parameters<typeof customersApi.update>[1]) => customersApi.update(id, data),
     disable: (id: string) => customersApi.disable(id),
@@ -29,7 +33,9 @@ class AppService {
 
   orders = {
     list: () => ordersApi.list(),
+    listSync: () => ordersApi.listSync(),
     get: (id: string) => ordersApi.get(id),
+    getSync: (id: string) => ordersApi.getSync(id),
     create: (data: any) => ordersApi.create(data),
     update: (id: string, data: any) => ordersApi.update(id, data),
     paymentInfo: (id: string) => ordersApi.paymentInfo(id),

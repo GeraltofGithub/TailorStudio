@@ -4,6 +4,8 @@ import { defineModel, schemaOpts } from './helpers.js'
 const schema = new Schema(
   {
     businessId: { type: Schema.Types.ObjectId, ref: 'Business', required: true, index: true },
+    serialNumber: Number,
+    displayId: String,
     name: { type: String, required: true },
     phone: { type: String, required: true },
     address: String,

@@ -7,7 +7,23 @@ import { ordersApi } from '../../services/api/ordersApi/ordersApi'
 import { useAuth } from '../../context/AuthContext'
 import { orderSlipHtml, paymentReceiptHtml, printElement } from '../../utils/receipt'
 import { formatMoneyForInput, parseMoneyAmount, sanitizeMoneyInput } from '../../utils/moneyInput'
+import { idFromApi } from '../../utils/apiId'
 import { useAppToast } from '../../utils/toast'
+import {
+  User,
+  Scissors,
+  Ruler,
+  Banknote,
+  ClipboardList,
+  X,
+  ArrowLeft,
+  Check,
+  Smartphone,
+  Printer,
+  Plus,
+  Save,
+  RotateCcw
+} from 'lucide-react'
 
 type Garment = 'SHIRT' | 'PANT' | 'BLOUSE' | 'SUIT' | 'KURTA' | 'SHERWANI' | 'INDO_WESTERN' | 'NEHRU_JACKET' | 'WAISTCOAT' | 'JODHPURI'
 type Status = 'PENDING' | 'IN_PROGRESS' | 'READY' | 'DELIVERED'
@@ -73,11 +89,11 @@ function parseSnapFromOrder(existing: any) {
 
 function groupFields(fields: MeasurementFieldDef[]) {
   const by: Record<string, MeasurementFieldDef[]> = {}
-  ;(fields || []).forEach((f) => {
-    const g = f.group || 'Measurements'
-    if (!by[g]) by[g] = []
-    by[g].push(f)
-  })
+    ; (fields || []).forEach((f) => {
+      const g = f.group || 'Measurements'
+      if (!by[g]) by[g] = []
+      by[g].push(f)
+    })
   return by
 }
 
@@ -132,11 +148,12 @@ export default memo(function OrderPage() {
   const [customers, setCustomers] = useState<any[]>([])
 
   const [customerId, setCustomerId] = useState<string>('')
-  const [garmentType, setGarmentType] = useState<Garment>('SHIRT')
+  const selectedCustomer = useMemo(() => customers.find(c => String(c.id) === String(customerId)), [customers, customerId])
+  const [garmentType, setGarmentType] = useState<Garment | ''>('')
   const [orderDate, setOrderDate] = useState<string>(todayISODate())
   const [deliveryDate, setDeliveryDate] = useState<string>(plusDays(7))
-  const [status, setStatus] = useState<Status>('PENDING')
-  const [advance, setAdvance] = useState<string>('0')
+  const [status, setStatus] = useState<Status | ''>('')
+  const [advance, setAdvance] = useState<string>('')
 
   const [billTotal, setBillTotal] = useState<string>('')
   const [billDesc, setBillDesc] = useState<string>('')
@@ -159,13 +176,19 @@ export default memo(function OrderPage() {
   const [payModalOpen, setPayModalOpen] = useState(false)
   const [payStep, setPayStep] = useState<'choice' | 'cash' | 'online'>('choice')
   const [payCashAmt, setPayCashAmt] = useState<string>('')
-  const [markPaidConfirmOpen, setMarkPaidConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [pullingMeasurements, setPullingMeasurements] = useState(false)
   const [syncingPhonePe, setSyncingPhonePe] = useState(false)
   const [recordingCash, setRecordingCash] = useState(false)
   const [initiatingOnlinePay, setInitiatingOnlinePay] = useState(false)
-  const [markingPaid, setMarkingPaid] = useState(false)
+  const [updateModalOpen, setUpdateModalOpen] = useState(false)
+
+  // NEW CUSTOMER STATE
+  const [isNewCustomer, setIsNewCustomer] = useState(true)
+  const [newCustName, setNewCustName] = useState('')
+  const [newCustPhone, setNewCustPhone] = useState('')
+  const [newCustAddress, setNewCustAddress] = useState('')
+  const [newCustUnit, setNewCustUnit] = useState<'INCH' | 'CM'>('INCH')
 
   const receiptPayRef = useRef<HTMLDivElement | null>(null)
   const orderSlipRef = useRef<HTMLDivElement | null>(null)
@@ -224,17 +247,17 @@ export default memo(function OrderPage() {
       return
     }
     let alive = true
-    ;(async () => {
-      try {
-        const o = await appService.orders.get(oid)
-        if (!alive) return
-        applyOrderResponse(o)
-        await loadPaymentInfo(oid)
-      } catch {
-        if (!alive) return
-        setOrderMissing(true)
-      }
-    })()
+      ; (async () => {
+        try {
+          const o = await appService.orders.get(oid)
+          if (!alive) return
+          applyOrderResponse(o)
+          await loadPaymentInfo(oid)
+        } catch {
+          if (!alive) return
+          setOrderMissing(true)
+        }
+      })()
     return () => {
       alive = false
     }
@@ -249,11 +272,11 @@ export default memo(function OrderPage() {
 
   useEffect(() => {
     let alive = true
-    ;(async () => {
-      const list = await appService.customers.listActive()
-      if (!alive) return
-      setCustomers(list || [])
-    })()
+      ; (async () => {
+        const list = await appService.customers.listActive()
+        if (!alive) return
+        setCustomers(list || [])
+      })()
     return () => {
       alive = false
     }
@@ -261,16 +284,16 @@ export default memo(function OrderPage() {
 
   useEffect(() => {
     let alive = true
-    ;(async () => {
-      let t: TemplatesMap = {}
-      try {
-        t = (await appService.customers.templates()) as TemplatesMap
-      } catch {
-        t = {}
-      }
-      if (!alive) return
-      setTemplates(t || {})
-    })()
+      ; (async () => {
+        let t: TemplatesMap = {}
+        try {
+          t = (await appService.customers.templates()) as TemplatesMap
+        } catch {
+          t = {}
+        }
+        if (!alive) return
+        setTemplates(t || {})
+      })()
     return () => {
       alive = false
     }
@@ -281,11 +304,12 @@ export default memo(function OrderPage() {
     if (!existing) return
     if (moneyFieldFocusRef.current) return
     setCustomerId(existing?.customer?.id != null ? String(existing.customer.id) : '')
+    setIsNewCustomer(false)
     setGarmentType(existing.garmentType || 'SHIRT')
     setOrderDate(isoDate(existing.orderDate))
     setDeliveryDate(isoDate(existing.deliveryDate))
     setStatus(existing.status || 'PENDING')
-    setAdvance(formatMoneyForInput(existing.advanceAmount ?? 0))
+    setAdvance((existing.advanceAmount ?? 0) > 0 ? formatMoneyForInput(existing.advanceAmount) : '')
     setNotes(existing.notes || '')
     setMatNotes(existing.materialsNotes || '')
     setDemNotes(existing.demandsNotes || '')
@@ -305,6 +329,17 @@ export default memo(function OrderPage() {
       setExtraAmt(ea > 0 ? formatMoneyForInput(ea) : '')
     }
   }, [existingOrder])
+
+  useEffect(() => {
+    if (!isNewCustomer && customerId && customers.length > 0) {
+      const found = customers.find(c => String(c.id) === String(customerId))
+      if (found) {
+        setNewCustName(found.name || '')
+        setNewCustPhone(found.phone || '')
+        setNewCustAddress(found.address || '')
+      }
+    }
+  }, [customerId, customers, isNewCustomer])
 
   const rankOfStatus = useCallback((s: Status) => {
     if (s === 'IN_PROGRESS') return 1
@@ -365,7 +400,7 @@ export default memo(function OrderPage() {
   }, [existingOrder, garmentType, snapCache])
 
   const renderReceipts = useCallback(() => {
-    const snLabel = existingOrder?.serialNumber ? `#${existingOrder.serialNumber}` : 'Draft'
+    const snLabel = existingOrder?.serialNumber ? `OD_${String(existingOrder.serialNumber).padStart(3, '0')}` : 'Draft'
     const custOpt = customers.find((c) => String(c.id) === String(customerId))
     const name = custOpt ? `${custOpt.name} — ${custOpt.phone}` : ''
 
@@ -428,7 +463,6 @@ export default memo(function OrderPage() {
     // Only clear staged measurements for NEW orders.
     // For existing orders, keep the saved snapshot visible (no need to copy again).
     if (oid || existingOrder) return
-    setMeasureEditorOpen(false)
     setSnapPreview('')
     setSnapCache(null)
   }, [customerId, garmentType])
@@ -463,7 +497,7 @@ export default memo(function OrderPage() {
   }, [customerId, garmentType, pullingMeasurements, toast])
 
   const saveMeasurementsToProfile = useCallback(async () => {
-    if (!customerId) {
+    if (!customerId && !isNewCustomer) {
       toast.error('Select a customer first.')
       return
     }
@@ -478,7 +512,7 @@ export default memo(function OrderPage() {
     setMeasureEditorOpen(false)
     setPendingProfileSave(true)
     toast.success(`${garmentType} measurements added to order`)
-  }, [customerId, garmentType, measureDraft, templates, toast])
+  }, [customerId, isNewCustomer, garmentType, measureDraft, templates, toast])
 
   const billDescTouchedRef = useRef(false)
   useEffect(() => {
@@ -487,126 +521,187 @@ export default memo(function OrderPage() {
     setBillDesc(`${garmentType} — tailoring`)
   }, [garmentType])
 
-  const onSubmitSave = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (savingRef.current) return
-    if (isCompleted) {
-      toast.error('Order completed. Delivered orders cannot be updated.')
-      return
-    }
+  const onSubmitSave = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (savingRef.current) return
+      if (isCompleted) {
+        toast.error('Order completed. Delivered orders cannot be updated.')
+        return
+      }
 
-    if (!customerId) {
-      toast.error('Select a customer.')
-      return
-    }
-    const totalNum = parseMoneyAmount(billTotal)
-    if (!Number.isFinite(totalNum) || totalNum <= 0) {
-      toast.error('Enter total charge (must be greater than 0).')
-      return
-    }
+      let finalCustomerId = customerId
 
-    // Measurements are mandatory for creating/updating an order.
-    // User must explicitly copy from customer profile OR save from the measurement modal.
-    if (measureEditorOpen) {
-      toast.error(`Save ${garmentType} measurements first, then create the order.`)
-      return
-    }
-    const snap = snapCache
-    if (!isMeasurementPayload(snap) || !hasAnyValues(snap)) {
-      toast.error(`Copy or enter ${garmentType} measurements before saving the order.`)
-      return
-    }
-
-    savingRef.current = true
-    setSaving(true)
-
-    const body = {
-      customerId,
-      garmentType,
-      measurementSnapshot: snap,
-      orderDate,
-      deliveryDate,
-      status,
-      advanceAmount: parseMoneyAmount(advance),
-      notes,
-      materialsNotes: matNotes || '',
-      demandsNotes: demNotes || '',
-      lines: gatherLines(),
-    }
-
-    try {
-      const beforeStatus = existingOrder?.status as Status | undefined
-      const data = oid ? await appService.orders.update(oid, body) : await appService.orders.create(body)
-      if (!oid && (data as any).id) {
-        // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
-        if (pendingProfileSave && isMeasurementPayload(snap)) {
-          await appService.customers
-            .saveMeasurement(customerId, garmentType, { unit: snap.unit, values: snap.values })
-            .catch(() => null)
-          setPendingProfileSave(false)
+      if (isNewCustomer) {
+        if (!newCustName.trim() || !newCustPhone.trim()) {
+          toast.error('Please enter name and phone for the new customer.')
+          return
         }
-        const newId = String((data as any).id)
-        ordersApi.invalidateOrderCache(newId)
-        applyOrderResponse(data)
-        nav(`/app/order?id=${newId}`, { replace: true })
-        await loadPaymentInfo(newId)
-        publishOrdersChanged({ orderId: newId, action: 'created' })
-        toast.success('Order created')
-        const st = (data as any)?.status as Status | undefined
-        if (st === 'IN_PROGRESS') toast.success('Work status: In progress')
-        if (st === 'READY') toast.success('Work status: Ready')
-        if (st === 'DELIVERED') toast.success('Work status: Delivered')
+        setSaving(true)
+        savingRef.current = true
+        try {
+          const created = await appService.customers.create({
+            name: newCustName.trim(),
+            phone: newCustPhone.trim(),
+            address: newCustAddress.trim(),
+            preferredUnit: newCustUnit,
+          })
+          const newId = idFromApi(created)
+          if (!newId) throw new Error('Failed to get new customer ID')
+          finalCustomerId = newId
+          setCustomerId(newId)
+          // Refresh customer list
+          const list = await appService.customers.listActive()
+          setCustomers(list || [])
+        } catch (err: any) {
+          const msg = err?.payload?.message || err?.payload?.error || err?.message
+          toast.error(msg ? `Customer creation failed: ${msg}` : 'Could not create customer.')
+          setSaving(false)
+          savingRef.current = false
+          return
+        }
+      } else if (customerId) {
+        if (!newCustName.trim() || !newCustPhone.trim()) {
+          toast.error('Customer name and phone are mandatory fields.')
+          return
+        }
+        setSaving(true)
+        savingRef.current = true
+        try {
+          const prefUnit = selectedCustomer?.preferredUnit || 'INCH'
+          await appService.customers.update(customerId, {
+            name: newCustName.trim(),
+            phone: newCustPhone.trim(),
+            address: newCustAddress.trim(),
+            preferredUnit: prefUnit,
+          })
+          // Refresh customer list
+          const list = await appService.customers.listActive()
+          setCustomers(list || [])
+        } catch (err: any) {
+          const msg = err?.payload?.message || err?.payload?.error || err?.message
+          toast.error(msg ? `Customer update failed: ${msg}` : 'Could not update customer details.')
+          setSaving(false)
+          savingRef.current = false
+          return
+        }
+      }
+
+      if (!finalCustomerId) {
+        toast.error('Select or create a customer.')
+        return
+      }
+      const totalNum = parseMoneyAmount(billTotal)
+      if (!Number.isFinite(totalNum) || totalNum <= 0) {
+        toast.error('Enter total charge (must be greater than 0).')
+        return
+      }
+
+      // Measurements are mandatory for creating/updating an order.
+      const snap = snapCache
+      if (!isMeasurementPayload(snap) || !hasAnyValues(snap)) {
+        toast.error(`Please enter ${garmentType} measurements before saving the order.`)
+        setMeasureEditorOpen(true)
+        setSaving(false)
         savingRef.current = false
         return
       }
-      applyOrderResponse(data)
-      await loadPaymentInfo(oid)
-      publishOrdersChanged({ orderId: oid, action: 'updated' })
-      toast.success('Order updated')
-      const afterStatus = (data as any)?.status as Status | undefined
-      if (afterStatus && afterStatus !== beforeStatus) {
-        if (afterStatus === 'IN_PROGRESS') toast.success('Work status: In progress')
-        if (afterStatus === 'READY') toast.success('Work status: Ready')
-        if (afterStatus === 'DELIVERED') toast.success('Work status: Delivered')
+
+      setSaving(true)
+      savingRef.current = true
+
+      const body = {
+        customerId: finalCustomerId,
+        garmentType,
+        measurementSnapshot: snap,
+        orderDate,
+        deliveryDate,
+        status,
+        advanceAmount: parseMoneyAmount(advance),
+        notes,
+        materialsNotes: matNotes || '',
+        demandsNotes: demNotes || '',
+        lines: gatherLines(),
       }
-      // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
-      if (pendingProfileSave && isMeasurementPayload(snap)) {
-        await appService.customers
-          .saveMeasurement(customerId, garmentType, { unit: snap.unit, values: snap.values })
-          .catch(() => null)
-        setPendingProfileSave(false)
+
+      try {
+        const beforeStatus = existingOrder?.status as Status | undefined
+        const data = oid ? await appService.orders.update(oid, body) : await appService.orders.create(body)
+        if (!oid && (data as any).id) {
+          // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
+          if (pendingProfileSave && isMeasurementPayload(snap)) {
+            await appService.customers
+              .saveMeasurement(finalCustomerId, garmentType, { unit: snap.unit, values: snap.values })
+              .catch(() => null)
+            setPendingProfileSave(false)
+          }
+          const newId = String((data as any).id)
+          ordersApi.invalidateOrderCache(newId)
+          applyOrderResponse(data)
+          nav(`/app/order?id=${newId}`, { replace: true })
+          loadPaymentInfo(newId)
+          publishOrdersChanged({ orderId: newId, action: 'created' })
+          toast.success('Order created')
+          const st = (data as any)?.status as Status | undefined
+          if (st === 'IN_PROGRESS') toast.success('Work status: In progress')
+          if (st === 'READY') toast.success('Work status: Ready')
+          if (st === 'DELIVERED') toast.success('Work status: Delivered')
+          savingRef.current = false
+          return
+        }
+        applyOrderResponse(data)
+        loadPaymentInfo(oid)
+        publishOrdersChanged({ orderId: oid, action: 'updated' })
+        toast.success('Order updated')
+        const afterStatus = (data as any)?.status as Status | undefined
+        if (afterStatus && afterStatus !== beforeStatus) {
+          if (afterStatus === 'IN_PROGRESS') toast.success('Work status: In progress')
+          if (afterStatus === 'READY') toast.success('Work status: Ready')
+          if (afterStatus === 'DELIVERED') toast.success('Work status: Delivered')
+        }
+        // After order is saved successfully, persist measurement to customer profile (only if we entered via modal).
+        if (pendingProfileSave && isMeasurementPayload(snap)) {
+          await appService.customers
+            .saveMeasurement(finalCustomerId, garmentType, { unit: snap.unit, values: snap.values })
+            .catch(() => null)
+          setPendingProfileSave(false)
+        }
+      } catch (e: any) {
+        const msg = e?.payload?.message || e?.payload?.error || e?.message
+        toast.error(msg ? String(msg) : 'Could not save order. Please try again.')
+      } finally {
+        savingRef.current = false
+        setSaving(false)
       }
-    } catch (e: any) {
-      const msg = e?.payload?.message || e?.payload?.error || e?.message
-      toast.error(msg ? String(msg) : 'Could not save order. Please try again.')
-    } finally {
-      savingRef.current = false
-      setSaving(false)
-    }
-  }, [
-    advance,
-    customerId,
-    demNotes,
-    deliveryDate,
-    garmentType,
-    billTotal,
-    gatherLines,
-    applyOrderResponse,
-    existingOrder?.status,
-    isCompleted,
-    loadPaymentInfo,
-    matNotes,
-    measureEditorOpen,
-    pendingProfileSave,
-    templates,
-    nav,
-    notes,
-    oid,
-    orderDate,
-    snapCache,
-    status,
-    toast,
-  ])
+    },
+    [
+      advance,
+      customerId,
+      demNotes,
+      deliveryDate,
+      garmentType,
+      billTotal,
+      gatherLines,
+      applyOrderResponse,
+      existingOrder?.status,
+      isCompleted,
+      loadPaymentInfo,
+      matNotes,
+      pendingProfileSave,
+      nav,
+      notes,
+      oid,
+      orderDate,
+      snapCache,
+      status,
+      toast,
+      isNewCustomer,
+      newCustName,
+      newCustPhone,
+      newCustAddress,
+      newCustUnit,
+    ],
+  )
 
   if (orderMissing) return <p>Order not found.</p>
 
@@ -615,451 +710,525 @@ export default memo(function OrderPage() {
 
   return (
     <>
-      <div className="no-print" style={{ marginBottom: '1rem' }}>
+      <div className="no-print" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Link className="btn btn-ghost btn-sm" to="/app/orders">
-          ← Orders
+          <ArrowLeft size={16} /> Back to Orders
         </Link>
+        {oid && (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                renderReceipts()
+                printElement(receiptPayRef.current, 'Payment receipt')
+              }}
+            >
+              <Printer size={16} /> Print Receipt
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                renderReceipts()
+                printElement(orderSlipRef.current, 'Work order')
+              }}
+            >
+              <Printer size={16} /> Print Work Order
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="no-print">
-        <form id="of" className="ts-app-form" onSubmit={onSubmitSave}>
-          <div className="panel">
-            <div className="panel-header">
-              <h2>{existingOrder ? `Order #${existingOrder.serialNumber}` : oid ? 'Edit order' : 'New order'}</h2>
-              <div className="no-print" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  id="btn-print-pay"
-                  onClick={() => {
-                    renderReceipts()
-                    printElement(receiptPayRef.current, 'Payment receipt')
-                  }}
-                >
-                  Print payment receipt
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  id="btn-print-order"
-                  onClick={() => {
-                    renderReceipts()
-                    printElement(orderSlipRef.current, 'Work order')
-                  }}
-                >
-                  Print work order
-                </button>
-              </div>
-            </div>
-
-            <div className="form-grid" style={{ padding: '1.25rem', gap: '1rem' }}>
-              <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-                Who it&apos;s for, what you&apos;re stitching, dates, and money — like a paper register, without the columns you don&apos;t need.
-              </p>
-
-              <div className="form-grid two">
-                <div>
-                  <label>Customer</label>
-                  <select
-                    id="cust"
-                    required
-                    value={customerId}
-                    disabled={isCompleted}
-                    onChange={(e) => {
-                      setCustomerId(e.target.value)
-                    }}
-                  >
-                    <option value="">Choose customer…</option>
-                    {(customers || []).map((c: any) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} — {c.phone}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Garment</label>
-                  <select
-                    id="gar"
-                    value={garmentType}
-                    disabled={isCompleted || !!oid || !!existingOrder}
-                    onChange={(e) => setGarmentType(e.target.value as Garment)}
-                  >
-                    {(['SHIRT', 'PANT', 'BLOUSE', 'SUIT', 'KURTA', 'SHERWANI', 'INDO_WESTERN', 'NEHRU_JACKET', 'WAISTCOAT', 'JODHPURI'] as Garment[]).map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-grid two">
-                <div>
-                  <label>Order taken on</label>
-                  <input
-                    id="od"
-                    type="date"
-                    required
-                    value={orderDate}
-                    disabled={isCompleted}
-                    onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                    onChange={(e) => setOrderDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label>Ready / delivery by</label>
-                  <input
-                    id="dd"
-                    type="date"
-                    required
-                    value={deliveryDate}
-                    disabled={isCompleted}
-                    onClick={(e) => (e.currentTarget as HTMLInputElement).showPicker?.()}
-                    onChange={(e) => {
-                      setDeliveryDate(e.target.value)
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="form-grid two">
-                <div>
-                  <label>
-                    Work status<span className="req-star">*</span>
-                  </label>
-                  <select
-                    id="st"
-                    required
-                    value={status}
-                    disabled={isCompleted}
-                    onChange={(e) => {
-                      const next = e.target.value as Status
-                      setStatus(next)
-                    }}
-                  >
-                    {(['PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED'] as Status[]).map((s) => {
-                      const r = rankOfStatus(s)
-                      const disabled = r < persistedRank
-                      return (
-                        <option key={s} value={s} disabled={disabled}>
-                          {s.replace(/_/g, ' ')}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-                <div>
-                  <label>
-                    Advance taken (₹)<span className="req-star">*</span>
-                  </label>
-                  <input
-                    id="adv"
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={advance}
-                    placeholder="0"
-                    disabled={isCompleted}
-                    onFocus={() => {
-                      moneyFieldFocusRef.current = true
-                    }}
-                    onBlur={() => {
-                      moneyFieldFocusRef.current = false
-                    }}
-                    onChange={(e) => setAdvance(sanitizeMoneyInput(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              <div className="panel" style={{ marginTop: '0.5rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-                <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>Bill</h2>
-                </div>
-                <div style={{ padding: '1rem 1.25rem' }}>
-                  <div className="form-grid two">
+        <form id="of" className="order-form-premium" onSubmit={onSubmitSave}>
+          <div className="order-grid">
+            {/* LEFT COLUMN: Main Details */}
+            <div className="order-main-col">
+              {/* ROW 1: CUSTOMER + BILLING */}
+              <div className="top-row-grid">
+                {/* SECTION 1: CUSTOMER */}
+                <div className="premium-card">
+                  <div className="card-header">
+                    <div className="header-icon"><User size={20} /></div>
                     <div>
-                      <label>
-                        Total charge for this job (₹)<span className="req-star">*</span>
-                      </label>
-                      <input
-                        id="bill-total"
-                        type="text"
-                        inputMode="decimal"
-                        autoComplete="off"
-                        value={billTotal}
-                        placeholder="e.g. 1500"
-                        disabled={isCompleted}
-                        onFocus={() => {
-                          moneyFieldFocusRef.current = true
-                        }}
-                        onBlur={() => {
-                          moneyFieldFocusRef.current = false
-                        }}
-                        onChange={(e) => setBillTotal(sanitizeMoneyInput(e.target.value))}
-                      />
-                    </div>
-                    <div>
-                      <label>What it&apos;s for (on bill)</label>
-                      <input
-                        id="bill-desc"
-                        type="text"
-                        value={billDesc}
-                        placeholder="e.g. Shirt — full stitching"
-                        disabled={isCompleted}
-                        onChange={(e) => {
-                          billDescTouchedRef.current = true
-                          setBillDesc(e.target.value)
-                        }}
-                      />
+                      <h3>Customer Details</h3>
+                      <p>Selection or creation.</p>
                     </div>
                   </div>
+                  <div className="card-body">
+                    <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem' }}>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${isNewCustomer ? 'btn-teal' : 'btn-ghost'}`}
+                        onClick={() => setIsNewCustomer(true)}
+                        style={{ flex: 1 }}
+                      >
+                        New
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${!isNewCustomer ? 'btn-teal' : 'btn-ghost'}`}
+                        onClick={() => setIsNewCustomer(false)}
+                        style={{ flex: 1 }}
+                      >
+                        Existing
+                      </button>
+                    </div>
 
-                  <div
-                    id="extra-row"
-                    className={extraEnabled ? '' : 'order-extra-hidden'}
-                    style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed var(--border)' }}
-                  >
-                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--muted)' }}>Extra (lining, buttons, urgent fee…)</p>
-                    <div className="form-grid two">
-                      <div>
-                        <label>Extra description</label>
-                        <input
-                          id="extra-desc"
-                          type="text"
-                          value={extraDesc}
-                          placeholder="Optional"
-                          disabled={isCompleted}
-                          onChange={(e) => setExtraDesc(e.target.value)}
-                        />
+                    {!isNewCustomer ? (
+                      <div className="form-grid">
+                        <div>
+                          <label>Select Customer</label>
+                          <select
+                            id="cust"
+                            required={!isNewCustomer}
+                            value={customerId}
+                            disabled={isCompleted || !!oid}
+                            onChange={(e) => setCustomerId(e.target.value)}
+                          >
+                            <option value="">Choose from list…</option>
+                            {(customers || []).map((c: any) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} — {c.phone}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {selectedCustomer && (
+                          <div className="form-grid" style={{ marginTop: '0.5rem' }}>
+                            <div className="form-grid two">
+                              <div>
+                                <label>Name <span className="req-star" style={{ color: 'var(--danger)' }}>*</span></label>
+                                <input
+                                  type="text"
+                                  value={newCustName}
+                                  onChange={(e) => setNewCustName(e.target.value)}
+                                  placeholder="e.g. John Doe"
+                                  required
+                                />
+                              </div>
+                              <div>
+                                <label>Phone <span className="req-star" style={{ color: 'var(--danger)' }}>*</span></label>
+                                <input
+                                  type="tel"
+                                  value={newCustPhone}
+                                  onChange={(e) => setNewCustPhone(e.target.value)}
+                                  placeholder="e.g. 9876543210"
+                                  required
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label>Address (Optional)</label>
+                              <textarea
+                                rows={1}
+                                value={newCustAddress}
+                                onChange={(e) => setNewCustAddress(e.target.value)}
+                                placeholder="Address details…"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <label>Extra amount (₹)</label>
-                        <input
-                          id="extra-amt"
-                          type="text"
-                          inputMode="decimal"
-                          autoComplete="off"
-                          value={extraAmt}
-                          disabled={isCompleted}
-                          onFocus={() => {
-                            moneyFieldFocusRef.current = true
-                          }}
-                          onBlur={() => {
-                            moneyFieldFocusRef.current = false
-                          }}
-                          onChange={(e) => setExtraAmt(sanitizeMoneyInput(e.target.value))}
-                        />
+                    ) : (
+                      <div className="form-grid">
+                        <div className="form-grid two">
+                          <div>
+                            <label>Name {isNewCustomer && <span className="req-star" style={{ color: 'var(--danger)' }}>*</span>}</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. John Doe"
+                              value={newCustName}
+                              onChange={(e) => setNewCustName(e.target.value)}
+                              required={isNewCustomer}
+                            />
+                          </div>
+                          <div>
+                            <label>Phone {isNewCustomer && <span className="req-star" style={{ color: 'var(--danger)' }}>*</span>}</label>
+                            <input
+                              type="tel"
+                              placeholder="e.g. 9876543210"
+                              value={newCustPhone}
+                              onChange={(e) => setNewCustPhone(e.target.value)}
+                              required={isNewCustomer}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label>Address (Optional)</label>
+                          <textarea
+                            placeholder="Address details…"
+                            rows={1}
+                            value={newCustAddress}
+                            onChange={(e) => setNewCustAddress(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* TOP RIGHT: PAYMENT BOX */}
+                <div className="premium-card bill-card">
+                  <div className="card-header">
+                    <div className="header-icon"><Banknote size={20} /></div>
+                    <h3>Payment Box</h3>
+                  </div>
+                  <div className="card-body">
+                    <div className="form-grid">
+                      <div className="form-grid two">
+                        <div>
+                          <label>Total (₹) <span className="req-star">*</span></label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={billTotal}
+                            placeholder="Enter amount"
+                            disabled={isCompleted}
+                            onFocus={() => (moneyFieldFocusRef.current = true)}
+                            onBlur={() => (moneyFieldFocusRef.current = false)}
+                            onChange={(e) => setBillTotal(sanitizeMoneyInput(e.target.value))}
+                            style={{ fontWeight: 700, color: 'var(--teal)' }}
+                          />
+                        </div>
+                        <div>
+                          <label>Advance (₹) <span className="req-star">*</span></label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={advance}
+                            placeholder="Advance paid"
+                            disabled={isCompleted}
+                            onFocus={() => (moneyFieldFocusRef.current = true)}
+                            onBlur={() => (moneyFieldFocusRef.current = false)}
+                            onChange={(e) => setAdvance(sanitizeMoneyInput(e.target.value))}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    id="toggle-extra"
-                    style={{ marginTop: '0.75rem' }}
-                    disabled={isCompleted}
-                    onClick={() => {
-                      setExtraEnabled((v) => {
-                        const next = !v
-                        if (!next) {
-                          setExtraAmt('')
-                          setExtraDesc('')
-                        }
-                        return next
-                      })
-                    }}
-                  >
-                    {extraEnabled ? 'Remove extra line' : '+ Add extra charge (material / fees)'}
-                  </button>
-                </div>
-              </div>
+                    <div className="bill-summary" style={{ marginTop: '1.25rem', padding: '1rem', background: 'var(--bg-elevated)', borderRadius: '10px' }}>
+                      <div className="summary-row" style={{ border: 'none', margin: 0 }}>
+                        <span style={{ fontSize: '0.8rem' }}>Total:</span>
+                        <strong>₹ {totals.sum.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row" style={{ border: 'none', margin: 0 }}>
+                        <span style={{ fontSize: '0.8rem' }}>Paid:</span>
+                        <strong className="text-success">₹ {totals.adv.toFixed(2)}</strong>
+                      </div>
+                      <div className="summary-row balance-row" style={{ border: 'none', margin: 0, marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                        <span style={{ fontSize: '0.8rem' }}>Balance:</span>
+                        <strong className={totals.bal > 0 ? 'text-danger' : 'text-success'} style={{ fontSize: '1.35rem' }}>₹ {totals.bal.toFixed(2)}</strong>
+                      </div>
+                    </div>
 
-              <div className="panel" style={{ marginTop: '1rem', background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-                <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>Payment</h2>
-                </div>
-                <div style={{ padding: '1rem 1.25rem', fontSize: '0.95rem' }}>
-                  <div className="stat-row">
-                    <span>Job total</span>
-                    <strong id="sum-display">₹ {totals.sum.toFixed(2)}</strong>
-                  </div>
-                  <div className="stat-row">
-                    <span>Advance received</span>
-                    <strong id="adv-display">₹ {totals.adv.toFixed(2)}</strong>
-                  </div>
-                  <div className="stat-row">
-                    <span>Balance due</span>
-                    <strong id="bal-display">₹ {totals.bal.toFixed(2)}</strong>
-                  </div>
-                  <p style={{ margin: '0.75rem 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                    Set status to Delivered when the customer collects; balance zero means fully paid.
-                  </p>
-
-                  <div id="pay-actions-wrap" style={{ marginTop: '0.75rem' }}>
                     {oid ? (
-                      <>
-                        <p id="pay-actions-hint" style={{ margin: '0 0 0.5rem', fontSize: '0.88rem', color: 'var(--muted)', display: canPayActions ? 'block' : 'none' }}>
-                          Record cash, UPI (PhonePe), or mark fully paid when there is balance due.
-                        </p>
-                        <div
-                          id="pay-actions"
-                          style={{
-                            display: canPayActions ? 'flex' : 'none',
-                            flexWrap: 'wrap',
-                            gap: '0.5rem',
-                            alignItems: 'center',
-                            minHeight: '2.25rem',
-                          }}
-                        >
-                          <button type="button" className="btn btn-teal btn-sm" id="btn-receive-pay" onClick={() => { setPayModalOpen(true); setPayStep('choice') }}>
-                            Receive payment
+                      totals.bal > 0.005 ? (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ flex: 1, padding: '0.85rem 0.5rem', fontSize: '0.95rem', whiteSpace: 'nowrap' }}
+                            disabled={
+                              saving || 
+                              !garmentType || 
+                              !status || 
+                              !(isMeasurementPayload(snapCache) && hasAnyValues(snapCache)) ||
+                              !orderDate ||
+                              !deliveryDate ||
+                              String(billTotal).trim() === '' ||
+                              String(advance).trim() === '' ||
+                              (isNewCustomer ? (!newCustName.trim() || !newCustPhone.trim()) : !customerId)
+                            }
+                            onClick={() => setUpdateModalOpen(true)}
+                          >
+                            {saving ? 'Updating…' : 'Update Order'}
                           </button>
                           <button
                             type="button"
-                            className="btn btn-ghost btn-sm"
-                            id="btn-mark-paid"
-                            onClick={async () => {
-                              if (!oid) return
-                              setMarkPaidConfirmOpen(true)
+                            className="btn btn-teal"
+                            style={{ flex: 1, padding: '0.85rem 0.5rem', fontSize: '0.95rem', whiteSpace: 'nowrap' }}
+                            onClick={() => {
+                              setPayCashAmt(totals.bal.toFixed(2))
+                              setPayStep('choice')
+                              setPayModalOpen(true)
                             }}
                           >
-                            Mark fully paid
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost btn-sm"
-                            id="btn-sync-phonepe"
-                            style={{ display: showSync ? 'inline-block' : 'none' }}
-                            disabled={syncingPhonePe}
-                            onClick={async () => {
-                              if (!oid) return
-                              if (syncingPhonePe) return
-                              setSyncingPhonePe(true)
-                              try {
-                                await appService.orders.phonePeSync(oid)
-                                await reloadOrder(oid)
-                                publishOrdersChanged({ orderId: oid, action: 'payment' })
-                                toast.success('Payment status synced')
-                              } catch (e: any) {
-                                const msg = e?.payload?.error || e?.payload?.message || e?.message
-                                toast.error(msg ? String(msg) : 'Could not sync online payment. Please try again.')
-                              } finally {
-                                setSyncingPhonePe(false)
-                              }
-                            }}
-                          >
-                            {syncingPhonePe ? 'Syncing…' : 'Sync online payment'}
+                            Receive Payment
                           </button>
                         </div>
-                        <p id="paid-full-note" style={{ display: canPayActions ? 'none' : 'block', margin: '0.5rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-                          No balance due — this order is fully paid.
-                        </p>
-                      </>
-                    ) : (
-                      <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
-                        Save the order first to record payments (cash, UPI, or mark as paid).
-                      </p>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-block"
+                          style={{ marginTop: '1.25rem', width: '100%', padding: '0.85rem', fontSize: '1.05rem' }}
+                          disabled={
+                            saving || 
+                            !garmentType || 
+                            !status || 
+                            !(isMeasurementPayload(snapCache) && hasAnyValues(snapCache)) ||
+                            !orderDate ||
+                            !deliveryDate ||
+                            String(billTotal).trim() === '' ||
+                            String(advance).trim() === '' ||
+                            (isNewCustomer ? (!newCustName.trim() || !newCustPhone.trim()) : !customerId)
+                          }
+                          onClick={() => setUpdateModalOpen(true)}
+                        >
+                          {saving ? 'Updating…' : 'Update Order'}
+                        </button>
+                      )
+                    ) : null}
+
+                    {!oid && (
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-block"
+                        style={{ marginTop: '1.25rem', width: '100%', padding: '0.85rem', fontSize: '1.05rem' }}
+                        disabled={
+                          saving || 
+                          !garmentType || 
+                          !status || 
+                          !(isMeasurementPayload(snapCache) && hasAnyValues(snapCache)) ||
+                          !orderDate ||
+                          !deliveryDate ||
+                          String(billTotal).trim() === '' ||
+                          String(advance).trim() === '' ||
+                          (isNewCustomer ? (!newCustName.trim() || !newCustPhone.trim()) : !customerId)
+                        }
+                      >
+                        {saving ? 'Creating…' : 'Create Order'}
+                      </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="panel" style={{ marginTop: '1rem' }}>
-                <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>Work order details</h2>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--muted)' }}>
-                    Shown on the <strong>work order</strong> print — not on the payment receipt.
-                  </p>
+              {/* SECTION 2: ORDER DETAILS */}
+              <div className="premium-card">
+                <div className="card-header">
+                  <div className="header-icon"><Scissors size={20} /></div>
+                  <div>
+                    <h3>Order & Garment</h3>
+                    <p>What are we stitching and when is it due?</p>
+                  </div>
                 </div>
-                <div style={{ padding: '1rem 1.25rem' }} className="form-grid ts-app-form">
-                  <div>
-                    <label>Materials & cloth</label>
-                    <textarea
-                      id="mat_notes"
-                      rows={2}
-                      placeholder="Fabric, colour, lining, buttons, supplies…"
-                      value={matNotes}
-                      disabled={isCompleted}
-                      onChange={(e) => setMatNotes(e.target.value)}
-                    />
+                <div className="card-body">
+                  <div className="form-grid two">
+                    <div>
+                      <label>Garment Type</label>
+                      <select
+                        id="gar"
+                        value={garmentType}
+                        required
+                        disabled={isCompleted || !!oid}
+                        onChange={(e) => setGarmentType(e.target.value as Garment)}
+                      >
+                        <option value="" disabled>Select garment type</option>
+                        {[
+                          'SHIRT',
+                          'PANT',
+                          'BLOUSE',
+                          'SUIT',
+                          'KURTA',
+                          'SHERWANI',
+                          'INDO_WESTERN',
+                          'NEHRU_JACKET',
+                          'WAISTCOAT',
+                          'JODHPURI',
+                        ].map((g) => (
+                          <option key={g} value={g}>
+                            {g}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Work Status</label>
+                      <select
+                        id="st"
+                        required
+                        value={status}
+                        disabled={isCompleted}
+                        onChange={(e) => setStatus(e.target.value as Status)}
+                      >
+                        <option value="" disabled>Select work status</option>
+                        {(['PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED'] as Status[]).map((s) => {
+                          const r = rankOfStatus(s)
+                          const disabled = r < persistedRank || (!!oid && s === 'PENDING')
+                          return (
+                            <option key={s} value={s} disabled={disabled}>
+                              {s.replace(/_/g, ' ')}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label>Customer requests & demands</label>
-                    <textarea
-                      id="dem_notes"
-                      rows={2}
-                      placeholder="Fitting preferences, deadlines, special instructions…"
-                      value={demNotes}
-                      disabled={isCompleted}
-                      onChange={(e) => setDemNotes(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label>Workshop notes</label>
-                    <textarea
-                      id="notes"
-                      rows={2}
-                      placeholder="Internal reminders, fitting notes…"
-                      value={notes}
-                      disabled={isCompleted}
-                      onChange={(e) => setNotes(e.target.value)}
-                    />
+
+                  <div className="form-grid two" style={{ marginTop: '1rem' }}>
+                    <div>
+                      <label>Order Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={orderDate}
+                        disabled={isCompleted}
+                        onClick={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          if (target.showPicker) target.showPicker();
+                        }}
+                        onChange={(e) => setOrderDate(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label>Delivery Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={deliveryDate}
+                        disabled={isCompleted}
+                        onClick={(e) => {
+                          const target = e.target as HTMLInputElement;
+                          if (target.showPicker) target.showPicker();
+                        }}
+                        onChange={(e) => setDeliveryDate(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="panel" style={{ marginTop: '1rem' }}>
-                <div className="panel-header">
-                  <h2 style={{ fontSize: '1rem' }}>
-                    Measurements on this order<span className="req-star">*</span>
-                  </h2>
-                  <button
-                    type="button"
-                    className="btn btn-teal btn-sm"
-                    id="pullM"
-                    disabled={isCompleted || pullingMeasurements}
-                    onClick={() => void pullMeasurements()}
-                  >
-                    {pullingMeasurements ? 'Copying…' : 'Copy from customer profile'}
-                  </button>
+              {/* SECTION 3 & 4: MEASUREMENTS & WORKSHOP NOTES */}
+              <div className="form-grid two laptop-grid">
+                <div className="premium-card">
+                  <div className="card-header">
+                    <div className="header-icon"><Ruler size={20} /></div>
+                    <div>
+                      <h3>Measurements</h3>
+                      <p>Record or pull saved sizes.</p>
+                    </div>
+                  </div>
+                  <div className="card-body">
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn-teal"
+                        style={{ flex: 1 }}
+                        onClick={() => setMeasureEditorOpen(true)}
+                        disabled={isCompleted}
+                      >
+                        {hasAnyValues(snapCache) ? <><RotateCcw size={16} /> Edit</> : <><Plus size={16} /> Enter</>}
+                      </button>
+                      {!isNewCustomer && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          style={{ flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
+                          disabled={isCompleted || pullingMeasurements || !customerId}
+                          onClick={() => void pullMeasurements()}
+                        >
+                          {pullingMeasurements ? '…' : <><RotateCcw size={14} /> Fetch from profile</>}
+                        </button>
+                      )}
+                    </div>
+
+                    {hasAnyValues(snapCache) ? (
+                      <div className="measurement-snapshot-box small">
+                        <div className="snapshot-unit">Unit: {snapCache.unit}</div>
+                        <div className="snapshot-grid">
+                          {Object.entries(snapCache.values || {})
+                            .filter(([_, v]) => v != null && String(v).trim() !== '')
+                            .map(([k, v]) => (
+                              <div key={k} className="snapshot-item">
+                                <span className="key">{k.replace(/([A-Z])/g, ' $1').toLowerCase()}:</span>
+                                <span className="val">{v}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="empty-state" style={{ padding: '1rem' }}>No measurements added.</div>
+                    )}
+                  </div>
                 </div>
-                <div style={{ padding: '1rem 1.25rem', color: 'var(--muted)', fontSize: '0.88rem' }}>
-                  Uses saved sizes for the customer and <strong>{garmentType}</strong>. This is required to create the order.
+
+                <div className="premium-card">
+                  <div className="card-header">
+                    <div className="header-icon"><ClipboardList size={20} /></div>
+                    <div>
+                      <h3>Workshop Notes</h3>
+                      <p>Internal instructions.</p>
+                    </div>
+                  </div>
+                  <div className="card-body">
+                    <div className="form-grid">
+                      <div>
+                        <label>Materials & Cloth</label>
+                        <textarea
+                          placeholder="e.g. Cotton, Blue checks…"
+                          rows={2}
+                          value={matNotes}
+                          disabled={isCompleted}
+                          onChange={(e) => setMatNotes(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label>Demands</label>
+                        <textarea
+                          placeholder="e.g. Slim fit, Side slits…"
+                          rows={2}
+                          value={demNotes}
+                          disabled={isCompleted}
+                          onChange={(e) => setDemNotes(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {/* measurement entry happens in a modal */}
-                <pre
-                  id="snap-preview"
-                  style={{
-                    display: snapPreview ? 'block' : 'none',
-                    whiteSpace: 'pre-wrap',
-                    background: 'var(--bg-elevated)',
-                    padding: '1rem',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text)',
-                    fontSize: '0.8rem',
-                    maxHeight: 220,
-                    overflow: 'auto',
-                  }}
-                >
-                  {snapPreview}
-                </pre>
               </div>
 
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ marginTop: '1rem', opacity: isCompleted || saving ? 0.75 : 1 }}
-                disabled={isCompleted || saving}
-              >
-                {!oid ? (saving ? 'Creating…' : 'Create order') : isCompleted ? 'Order completed' : saving ? 'Updating…' : 'Update order'}
-              </button>
+              {/* PAYMENT FOOTER: Sync Actions */}
+              {oid && showSync && (
+                <div className="premium-card">
+                  <div className="card-body" style={{ padding: '1rem 1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+                        Manage UPI sync or manual payment status.
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.75rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={syncingPhonePe}
+                          onClick={async () => {
+                            if (syncingPhonePe) return
+                            setSaving(true)
+                            try {
+                              await appService.orders.phonePeSync(oid)
+                              await reloadOrder(oid)
+                              publishOrdersChanged({ orderId: oid, action: 'payment' })
+                              toast.success('Synced')
+                            } catch (e: any) {
+                              toast.error('Sync failed.')
+                            } finally {
+                              setSaving(false)
+                            }
+                          }}
+                        >
+                          <RotateCcw size={14} /> Sync UPI
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </form>
       </div>
+
 
       {/* Payment modal */}
       <div
@@ -1069,208 +1238,133 @@ export default memo(function OrderPage() {
           display: payModalOpen ? 'flex' : 'none',
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.5)',
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 1000,
           alignItems: 'center',
           justifyContent: 'center',
           padding: '1rem',
         }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setPayModalOpen(false)
-        }}
+        onClick={(e) => e.target === e.currentTarget && setPayModalOpen(false)}
       >
-        <div className="panel pay-modal-shell" style={{ margin: 0, position: 'relative' }}>
-          <div className="pay-modal-body">
-            <button type="button" id="pay-modal-close" className="btn btn-ghost btn-sm" style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }} aria-label="Close" onClick={() => setPayModalOpen(false)}>
-              ✕
+        <div className="premium-card modal-card" style={{ width: 'min(420px, 100%)' }}>
+          <div className="card-header">
+            <h3>Receive Payment</h3>
+            <button className="close-btn" onClick={() => setPayModalOpen(false)}>
+              <X size={20} />
             </button>
-
-            {payStep === 'choice' ? (
-              <div id="pay-step-choice">
-                <h3 style={{ marginTop: 0 }}>Receive payment</h3>
-                <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>How is the customer paying the balance?</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    id="pay-opt-cash"
-                    onClick={() => {
-                      setPayCashAmt(totals.bal > 0 ? totals.bal.toFixed(2) : '')
-                      setPayStep('cash')
-                    }}
-                  >
-                    Cash
-                  </button>
-                  <button type="button" className="btn btn-teal" id="pay-opt-online" onClick={() => setPayStep('online')}>
-                    Online (UPI / PhonePe)
-                  </button>
-                </div>
+          </div>
+          <div className="card-body">
+            {payStep === 'choice' && (
+              <div className="payment-choices">
+                <button
+                  className="payment-choice-btn"
+                  onClick={() => {
+                    setPayCashAmt(totals.bal.toFixed(2))
+                    setPayStep('cash')
+                  }}
+                >
+                  <span className="icon"><Banknote size={24} /></span>
+                  <div className="info">
+                    <strong>Cash</strong>
+                    <span>Record manual cash entry</span>
+                  </div>
+                </button>
+                <button className="payment-choice-btn teal" onClick={() => setPayStep('online')}>
+                  <span className="icon"><Smartphone size={24} /></span>
+                  <div className="info">
+                    <strong>Online / UPI</strong>
+                    <span>Pay via PhonePe Gateway</span>
+                  </div>
+                </button>
               </div>
-            ) : null}
+            )}
 
-            {payStep === 'cash' ? (
-              <div id="pay-step-cash">
-                <h3 style={{ marginTop: 0 }}>Cash received</h3>
-                <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
-                  Balance due: <strong id="pay-bal-due">₹ {totals.bal.toFixed(2)}</strong>
+            {payStep === 'cash' && (
+              <div className="cash-entry">
+                <p style={{ marginBottom: '1rem', color: 'var(--muted)' }}>
+                  Recording cash for <strong>Balance: ₹ {totals.bal.toFixed(2)}</strong>
                 </p>
-                <label>Amount received (₹)</label>
+                <label>Amount Received (₹)</label>
                 <input
-                  id="pay-cash-amt"
                   type="text"
                   inputMode="decimal"
-                  autoComplete="off"
                   value={payCashAmt}
                   onChange={(e) => setPayCashAmt(sanitizeMoneyInput(e.target.value))}
+                  autoFocus
                 />
-                <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
                   <button
-                    type="button"
                     className="btn btn-primary"
-                    id="pay-cash-submit"
+                    style={{ flex: 2 }}
                     disabled={recordingCash}
                     onClick={async () => {
-                      if (!oid) return
-                      if (recordingCash) return
                       const amt = parseMoneyAmount(payCashAmt)
-                      if (!amt || amt <= 0) {
-                        toast.error('Enter the cash amount received.')
-                        return
-                      }
+                      if (!amt || amt <= 0) return toast.error('Enter valid amount')
                       setRecordingCash(true)
                       try {
-                        await appService.orders.payCash(oid, amt)
+                        await appService.orders.payCash(oid!, amt)
                         setPayModalOpen(false)
                         await reloadOrder(oid)
-                        publishOrdersChanged({ orderId: oid, action: 'payment' })
-                        toast.success('Cash payment recorded')
-                      } catch (e: any) {
-                        const msg = e?.payload?.error || e?.payload?.message || e?.message
-                        toast.error(msg ? String(msg) : 'Could not record cash payment. Please try again.')
+                        publishOrdersChanged({ orderId: oid!, action: 'payment' })
+                        toast.success('Payment recorded')
+                      } catch (err: any) {
+                        toast.error('Failed to record payment')
                       } finally {
                         setRecordingCash(false)
                       }
                     }}
                   >
-                    {recordingCash ? 'Recording…' : 'Record cash'}
+                    Confirm Cash
                   </button>
-                  <button type="button" className="btn btn-ghost" id="pay-cash-back" onClick={() => setPayStep('choice')}>
-                    Back
+                  <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setPayModalOpen(false)}>
+                    Cancel
                   </button>
                 </div>
               </div>
-            ) : null}
+            )}
 
-            {payStep === 'online' ? (
-              <div id="pay-step-online">
-                <h3 style={{ marginTop: 0 }}>Online payment</h3>
-                <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
-                  You will be redirected to PhonePe to pay with UPI or card. When you return, we confirm the payment automatically.
+            {payStep === 'online' && (
+              <div className="online-entry">
+                <p style={{ marginBottom: '1.5rem', color: 'var(--muted)' }}>
+                  Redirecting to PhonePe to collect <strong>₹ {totals.bal.toFixed(2)}</strong>.
                 </p>
-                <p id="pay-online-off" style={{ display: paymentInfo?.phonePeConfigured ? 'none' : 'block', color: '#b44', fontSize: '0.9rem' }}>
-                  PhonePe is not configured. Set phonepe.enabled and credentials in application.properties, then restart the app.
-                </p>
-                <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                {!paymentInfo?.phonePeConfigured && (
+                  <p className="error-text" style={{ color: 'var(--danger)', marginBottom: '1rem' }}>
+                    PhonePe is not configured in settings.
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
-                    type="button"
                     className="btn btn-primary"
-                    id="pay-online-go"
+                    style={{ flex: 2 }}
                     disabled={!paymentInfo?.phonePeConfigured || initiatingOnlinePay}
                     onClick={async () => {
-                      if (!oid || !paymentInfo?.phonePeConfigured) return
-                      if (initiatingOnlinePay) return
                       setInitiatingOnlinePay(true)
                       try {
-                        const data = await appService.orders.phonePeInitiate(oid)
-                        if ((data as any).redirectUrl) window.location.href = (data as any).redirectUrl
-                        else toast.error(String((data as any).error || 'Could not start PhonePe checkout. Please try again.'))
-                      } catch (e: any) {
-                        const msg = e?.payload?.error || e?.payload?.message || e?.message
-                        toast.error(msg ? String(msg) : 'Could not start PhonePe checkout. Please try again.')
+                        const res = await appService.orders.phonePeInitiate(oid!)
+                        if ((res as any).redirectUrl) window.location.href = (res as any).redirectUrl
+                        else toast.error('Payment initialization failed.')
+                      } catch (err) {
+                        toast.error('Could not start payment.')
                       } finally {
                         setInitiatingOnlinePay(false)
                       }
                     }}
                   >
-                    {initiatingOnlinePay ? 'Opening…' : 'Pay now'}
+                    Open Payment Gateway
                   </button>
-                  <button type="button" className="btn btn-ghost" id="pay-online-back" onClick={() => setPayStep('choice')}>
+                  <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setPayStep('choice')}>
                     Back
                   </button>
                 </div>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       </div>
 
-      {/* Mark fully paid confirm modal */}
-      <div
-        id="mark-paid-modal"
-        className="no-print"
-        style={{
-          display: markPaidConfirmOpen ? 'flex' : 'none',
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.5)',
-          zIndex: 1000,
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1rem',
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setMarkPaidConfirmOpen(false)
-        }}
-      >
-        <div className="panel pay-modal-shell" style={{ margin: 0, position: 'relative', width: 'min(560px, 100%)' }}>
-          <div className="pay-modal-body">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}
-              aria-label="Close"
-              onClick={() => setMarkPaidConfirmOpen(false)}
-            >
-              ✕
-            </button>
-            <h3 style={{ marginTop: 0 }}>Mark fully paid?</h3>
-            <p style={{ color: 'var(--muted)', fontSize: '0.92rem' }}>
-              This will set <strong>Advance received</strong> equal to <strong>Job total</strong>.
-            </p>
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={markingPaid}
-                onClick={async () => {
-                  if (!oid) return
-                  if (markingPaid) return
-                  setMarkingPaid(true)
-                  try {
-                    await appService.orders.markPaid(oid)
-                    setMarkPaidConfirmOpen(false)
-                    await reloadOrder(oid)
-                    publishOrdersChanged({ orderId: oid, action: 'payment' })
-                    toast.success('Order marked as fully paid')
-                  } catch (e: any) {
-                    const msg = e?.payload?.error || e?.payload?.message || e?.message
-                    toast.error(msg ? String(msg) : 'Failed to mark order as paid. Please try again.')
-                  } finally {
-                    setMarkingPaid(false)
-                  }
-                }}
-              >
-                {markingPaid ? 'Saving…' : 'Confirm'}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => setMarkPaidConfirmOpen(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Measurements modal (shown only when customer has no saved measurements for selected garment) */}
+      {/* Measurement modal */}
       <div
         id="measure-modal"
         className="no-print"
@@ -1278,104 +1372,583 @@ export default memo(function OrderPage() {
           display: measureEditorOpen ? 'flex' : 'none',
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.5)',
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 1000,
           alignItems: 'center',
           justifyContent: 'center',
           padding: '1rem',
         }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) setMeasureEditorOpen(false)
-        }}
+        onClick={(e) => e.target === e.currentTarget && setMeasureEditorOpen(false)}
       >
-        <div className="panel pay-modal-shell" style={{ margin: 0, position: 'relative', width: 'min(920px, 100%)' }}>
-          <div className="pay-modal-body" style={{ maxHeight: '82vh', overflow: 'auto' }}>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}
-              aria-label="Close"
-              onClick={() => setMeasureEditorOpen(false)}
-            >
-              ✕
-            </button>
-
-            <h3 style={{ marginTop: 0 }}>Enter {garmentType} measurements</h3>
-            <p style={{ margin: '0 0 0.75rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
-              This customer doesn&apos;t have saved <strong>{garmentType}</strong> measurements yet. Save once to reuse next time.
-            </p>
-
-            <div className="ts-app-form">
-              <div className="unit-toggle" style={{ marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Unit</span>
-                <label>
-                  <input
-                    type="radio"
-                    name="ord-unit"
-                    value="INCH"
-                    checked={measureDraft.unit === 'INCH'}
-                    onChange={() => setMeasureDraft((p) => ({ ...p, unit: 'INCH' }))}
-                  />{' '}
-                  in
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="ord-unit"
-                    value="CM"
-                    checked={measureDraft.unit === 'CM'}
-                    onChange={() => setMeasureDraft((p) => ({ ...p, unit: 'CM' }))}
-                  />{' '}
-                  cm
-                </label>
+        <div className="premium-card modal-card" style={{ width: 'min(960px, 100%)', maxHeight: '92vh' }}>
+          <div className="card-header" style={{ padding: '1rem 1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div className="header-icon"><Ruler size={18} /></div>
+              <div>
+                <h3 style={{ fontSize: '1rem' }}>{garmentType} Measurements</h3>
+                <p style={{ fontSize: '0.8rem' }}>Record the custom sizing for this job.</p>
               </div>
+            </div>
+            <button className="close-btn" onClick={() => setMeasureEditorOpen(false)}>
+              <X size={20} />
+            </button>
+          </div>
+          <div className="card-body" style={{ overflowY: 'auto', padding: '1.5rem', background: 'var(--bg-card)' }}>
+            <div className="modal-actions-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1.25rem', marginBottom: '1.5rem', background: 'var(--bg-elevated)', padding: '1.25rem', borderRadius: '12px', position: 'relative', zIndex: 5 }}>
+              <div style={{ flex: 1, minWidth: '220px' }}>
+                <label style={{ fontSize: '0.75rem' }}>Switch Garment Type</label>
+                <select
+                  value={garmentType}
+                  disabled={!!oid}
+                  onChange={(e) => setGarmentType(e.target.value as Garment)}
+                  style={{ background: 'var(--bg)', borderColor: 'var(--border)' }}
+                >
+                  {[
+                    'SHIRT',
+                    'PANT',
+                    'BLOUSE',
+                    'SUIT',
+                    'KURTA',
+                    'SHERWANI',
+                    'INDO_WESTERN',
+                    'NEHRU_JACKET',
+                    'WAISTCOAT',
+                    'JODHPURI',
+                  ].map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="unit-selector" style={{ background: 'var(--bg)', border: '1px solid var(--border)', padding: '0.35rem 0.75rem' }}>
+                <label style={{ margin: 0, fontSize: '0.75rem' }}>Measurement Unit</label>
+                <div className="radio-group">
+                  <label className="radio-btn">
+                    <input
+                      type="radio"
+                      name="modal-unit"
+                      checked={measureDraft.unit === 'INCH'}
+                      onChange={() => setMeasureDraft((p) => ({ ...p, unit: 'INCH' }))}
+                    />
+                    <span>Inches</span>
+                  </label>
+                  <label className="radio-btn">
+                    <input
+                      type="radio"
+                      name="modal-unit"
+                      checked={measureDraft.unit === 'CM'}
+                      onChange={() => setMeasureDraft((p) => ({ ...p, unit: 'CM' }))}
+                    />
+                    <span>CM</span>
+                  </label>
+                </div>
+              </div>
+            </div>
 
+            <div className="measurement-editor-grid" style={{ display: 'grid', gap: '2rem' }}>
               {(Object.entries(groupFields(templates[garmentType] || [])) || []).map(([gn, fs]) => (
-                <div key={gn}>
-                  <div className="measurement-group-title">{gn}</div>
-                  <div className="form-grid two">
-                    {fs.map((f) => {
-                      const v = measureDraft.values[f.key] != null ? String(measureDraft.values[f.key]) : ''
-                      return (
-                        <div key={f.key}>
-                          <label>
-                            {f.label}
-                            <span className="req-star">*</span>
-                          </label>
-                          {f.hint ? <p className="field-hint">{f.hint}</p> : null}
-                          <input
-                            type="text"
-                            value={v}
-                            placeholder={placeholderFor(measureDraft.unit, f.label)}
-                            onChange={(e) =>
-                              setMeasureDraft((p) => ({ ...p, values: { ...p.values, [f.key]: e.target.value } }))
-                            }
-                          />
-                        </div>
-                      )
-                    })}
+                <div key={gn} className="measurement-group" style={{ border: '1px solid var(--border)', borderRadius: '12px', padding: '1.25rem' }}>
+                  <h4 className="group-title" style={{ marginTop: '-2rem', background: 'var(--bg-card)', padding: '0 0.5rem', width: 'fit-content', marginLeft: '0.5rem', fontSize: '0.8rem', fontWeight: 700, color: 'var(--teal)', position: 'relative', zIndex: 1 }}>
+                    {gn}
+                  </h4>
+                  <div className="fields-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem', marginTop: '0.5rem' }}>
+                    {fs.map((f) => (
+                      <div key={f.key} className="field-item">
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                          {f.label}
+                          {!isOptionalField(f) && <span className="req-star" style={{ color: 'var(--danger)' }}>*</span>}
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          style={{ padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+                          value={measureDraft.values[f.key] || ''}
+                          placeholder={placeholderFor(measureDraft.unit, f.label)}
+                          onChange={(e) =>
+                            setMeasureDraft((p) => ({ ...p, values: { ...p.values, [f.key]: e.target.value } }))
+                          }
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
-
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
-                <button type="button" className="btn btn-primary" onClick={() => void saveMeasurementsToProfile()}>
-                  {`Save ${garmentType} to customer`}
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={() => setMeasureEditorOpen(false)}>
-                  Cancel
-                </button>
-              </div>
             </div>
+          </div>
+          <div className="modal-footer" style={{ padding: '1.25rem 1.5rem', background: 'var(--bg-elevated)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button type="button" className="btn btn-ghost" onClick={() => setMeasureEditorOpen(false)}>
+              Discard
+            </button>
+            <button type="button" className="btn btn-primary" style={{ minWidth: '160px' }} onClick={() => void saveMeasurementsToProfile()}>
+              <Save size={16} /> Save Measurements
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Print previews (hidden area used for print) */}
+
+
+      {/* Update Order Modal */}
+      {updateModalOpen && (
+        <div
+          className="no-print modal-overlay"
+          onClick={(e) => e.target === e.currentTarget && setUpdateModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div className="premium-card modal-card" style={{ width: 'min(400px, 100%)' }}>
+            <div className="card-header">
+              <h3>Update Order</h3>
+              <button className="close-btn" onClick={() => setUpdateModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="card-body">
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label>Work Status</label>
+                <select
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as Status)}
+                >
+                  <option value="" disabled>Select work status</option>
+                  <option value="PENDING" disabled>PENDING</option>
+                  <option value="IN_PROGRESS" disabled={rankOfStatus('IN_PROGRESS') < persistedRank}>IN PROGRESS</option>
+                  <option value="READY" disabled={rankOfStatus('READY') < persistedRank}>READY</option>
+                  <option value="DELIVERED" disabled={rankOfStatus('DELIVERED') < persistedRank}>DELIVERED</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', flexDirection: 'column' }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={saving || !status}
+                  onClick={(e) => {
+                    setUpdateModalOpen(false);
+                    onSubmitSave(e as any);
+                  }}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+
+                {canPayActions && (
+                  <button
+                    type="button"
+                    className="btn btn-teal"
+                    onClick={() => {
+                      setUpdateModalOpen(false);
+                      setPayCashAmt(totals.bal.toFixed(2));
+                      setPayStep('cash');
+                      setPayModalOpen(true);
+                    }}
+                  >
+                    <Banknote size={16} style={{ marginRight: '0.5rem' }} /> Receive Payment (Cash)
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print previews (hidden) */}
       <div className="receipt-previews">
-        <div ref={receiptPayRef} id="receipt-print" className="receipt-sheet" aria-label="Payment receipt" />
-        <div ref={orderSlipRef} id="order-slip-print" className="receipt-sheet" aria-label="Work order" />
+        <div ref={receiptPayRef} id="receipt-print" className="receipt-sheet" />
+        <div ref={orderSlipRef} id="order-slip-print" className="receipt-sheet" />
       </div>
+
+      <style>{`
+        select {
+          cursor: pointer;
+        }
+
+        .order-form-premium {
+          --card-bg: var(--bg-card);
+          --card-border: var(--border);
+          --header-bg: var(--bg-elevated);
+        }
+
+        .order-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+          width: 100%;
+        }
+
+        .top-row-grid {
+          display: grid;
+          grid-template-columns: 1fr 380px;
+          gap: 1.5rem;
+          align-items: stretch;
+        }
+
+        @media (max-width: 1100px) {
+          .top-row-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 1024px) {
+          .order-grid {
+            grid-template-columns: 1fr;
+          }
+          .laptop-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .sticky-card {
+            position: static !important;
+          }
+        }
+
+        .laptop-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1.5rem;
+          align-items: stretch;
+        }
+
+        .laptop-grid .premium-card {
+          margin-bottom: 0;
+          height: 100%;
+        }
+
+        .premium-card {
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 16px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+          margin-bottom: 1.5rem;
+          overflow: hidden;
+        }
+
+        .card-header {
+          padding: 1.25rem 1.5rem;
+          background: linear-gradient(to bottom, var(--header-bg), transparent);
+          border-bottom: 1px solid var(--card-border);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .card-header h3 {
+          margin: 0;
+          font-size: 1.1rem;
+          color: var(--text-h);
+        }
+
+        .card-header p {
+          margin: 0;
+          font-size: 0.85rem;
+          color: var(--muted);
+        }
+
+        .header-icon {
+          width: 40px;
+          height: 40px;
+          background: var(--teal-dim);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.25rem;
+        }
+
+        .card-body {
+          padding: 1.5rem;
+        }
+
+        .sticky-card {
+          position: sticky;
+          top: 1.5rem;
+        }
+
+        .bill-total-input {
+          font-size: 1.5rem !important;
+          font-weight: 700;
+          color: var(--teal) !important;
+          text-align: right;
+        }
+
+        .bill-summary {
+          margin-top: 1.5rem;
+          padding-top: 1rem;
+          border-top: 1px dashed var(--border);
+        }
+
+        .summary-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 0.5rem;
+          font-size: 0.95rem;
+        }
+
+        .balance-row {
+          margin-top: 0.75rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid var(--border);
+          font-size: 1.1rem;
+        }
+
+        .text-success { color: #10b981; }
+        .text-danger { color: #ef4444; }
+
+        .paid-badge {
+          background: #ecfdf5;
+          color: #059669;
+          padding: 0.75rem;
+          border-radius: 10px;
+          text-align: center;
+          font-weight: 700;
+          margin-top: 1rem;
+        }
+
+        .measurement-snapshot-box {
+          background: var(--bg-elevated);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 1rem;
+        }
+
+        .snapshot-unit {
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          color: var(--muted);
+          margin-bottom: 0.75rem;
+          border-bottom: 1px solid var(--border);
+          padding-bottom: 0.5rem;
+        }
+
+        .snapshot-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+          gap: 0.75rem;
+        }
+
+        .measurement-snapshot-box.small {
+          padding: 0.75rem;
+          font-size: 0.82rem;
+        }
+
+        .measurement-snapshot-box.small .snapshot-grid {
+          grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+          gap: 0.5rem;
+        }
+
+        .measurement-snapshot-box.small .snapshot-item .val {
+          font-size: 0.88rem;
+        }
+
+        .snapshot-item {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .snapshot-item .key {
+          font-size: 0.75rem;
+          color: var(--muted);
+          text-transform: capitalize;
+        }
+
+        .snapshot-item .val {
+          font-weight: 600;
+          font-size: 0.95rem;
+        }
+
+        .empty-state {
+          text-align: center;
+          padding: 2rem;
+          background: var(--bg-elevated);
+          border: 1px dashed var(--border);
+          border-radius: 12px;
+          color: var(--muted);
+          font-style: italic;
+        }
+
+        .modal-card {
+          background-color: var(--bg-card);
+          background-image: none;
+          color: var(--text);
+          animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          border: 1px solid var(--border);
+          position: relative;
+          z-index: 1001;
+        }
+
+        @keyframes modalSlideUp {
+          from { transform: translateY(40px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+
+        .payment-choices {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .payment-choice-btn {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 1.25rem;
+          border-radius: 12px;
+          border: 1px solid var(--border);
+          background: var(--bg-card);
+          cursor: pointer;
+          text-align: left;
+          transition: all 0.2s;
+          color: inherit;
+        }
+
+        .payment-choice-btn:hover {
+          background: var(--bg-elevated);
+          transform: translateY(-2px);
+          border-color: var(--teal);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .payment-choice-btn.teal {
+          background: var(--teal-dim);
+          border-color: rgba(47, 127, 123, 0.2);
+        }
+
+        .payment-choice-btn .info strong {
+          display: block;
+          font-size: 1rem;
+        }
+
+        .payment-choice-btn .info span {
+          font-size: 0.8rem;
+          color: var(--muted);
+        }
+
+        .measurement-editor-grid {
+          display: grid;
+          gap: 2.5rem;
+        }
+
+        .measurement-group {
+          position: relative;
+          transition: all 0.2s;
+        }
+
+        .group-title {
+          font-size: 0.85rem;
+          font-weight: 700;
+          color: var(--teal);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 1.25rem;
+        }
+
+        .fields-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 1.25rem;
+        }
+
+        .field-item {
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+        }
+
+        .field-item label {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--muted);
+        }
+
+        .field-item input {
+          width: 100%;
+          padding: 0.65rem 0.85rem;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: var(--bg);
+          font-size: 0.95rem;
+          transition: all 0.2s;
+        }
+
+        .field-item input:focus {
+          border-color: var(--teal);
+          background: var(--bg-card);
+          outline: none;
+          box-shadow: 0 0 0 3px var(--teal-dim);
+        }
+
+        .field-item input::placeholder {
+          color: var(--border);
+          font-size: 0.85rem;
+        }
+
+        .unit-selector {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          border-radius: 12px;
+          padding: 0.25rem;
+        }
+
+        .radio-group {
+          display: flex;
+          gap: 0.25rem;
+          background: var(--bg);
+          padding: 0.25rem;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+        }
+
+        .radio-btn {
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.4rem 0.8rem;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          transition: all 0.2s;
+        }
+
+        .radio-btn:has(input:checked) {
+          background: var(--teal);
+          color: white;
+        }
+
+        .radio-btn input { display: none; }
+
+        .close-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--muted);
+          padding: 0.5rem;
+          border-radius: 50%;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .close-btn:hover {
+          background: var(--bg-elevated);
+          color: var(--text);
+        }
+      `}</style>
     </>
   )
 })

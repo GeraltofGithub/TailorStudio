@@ -5,6 +5,7 @@ import { appService } from '../../services/appService'
 import { publishCustomersChanged } from '../../services/businessRealtime'
 import { idFromApi } from '../../utils/apiId'
 import { useAppToast } from '../../utils/toast'
+import { User, Ruler, History, Save, ChevronLeft } from 'lucide-react'
 
 type Garment =
   | 'SHIRT'
@@ -386,89 +387,149 @@ export default memo(function CustomerPage() {
     const fields = templates[g] || []
 
     return (
-      <div className="panel">
-        <div className="panel-header">
-          <h2>New customer</h2>
+      <div className="order-form-premium" style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div className="panel-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: '1rem 0 0' }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center' }}><User size={24} style={{ marginRight: '0.5rem' }}/> New Customer</h2>
+          <Link className="btn btn-ghost btn-sm" to="/app/customers">
+            <ChevronLeft size={16} /> Back
+          </Link>
         </div>
-        <div style={{ padding: '1.25rem' }}>
-          <form className="ts-app-form" style={{ maxWidth: 720 }} onSubmit={createCustomer}>
-            <div className="form-grid two">
-              <div>
-                <label>Name</label>
-                <input name="name" type="text" required placeholder="Customer name" />
-              </div>
-              <div>
-                <label>Phone</label>
-                <input name="phone" type="tel" required placeholder="Mobile number" />
-              </div>
-            </div>
-            <div>
-              <label>Address</label>
-              <textarea name="address" placeholder="Optional" />
-            </div>
-            <div>
-              <label>Default measurement unit</label>
-              <select
-                name="preferredUnit"
-                value={newUnit}
-                onChange={(e) => {
-                  const v = e.target.value === 'CM' ? 'CM' : 'INCH'
-                  setNewUnit(v)
-                  setNewDraft((prev) => {
-                    const next = { ...prev }
-                    for (const gg of GARMENTS) {
-                      const d = next[gg]
-                      const empty = !d.values || !Object.keys(d.values).some((k) => d.values[k] && String(d.values[k]).trim() !== '')
-                      if (empty) next[gg] = { ...d, unit: v }
-                    }
-                    return next
-                  })
-                }}
-              >
-                <option value="INCH">Inches (in)</option>
-                <option value="CM">Centimetres (cm)</option>
-              </select>
-            </div>
 
-            <p style={{ margin: '1rem 0 0.35rem', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--muted)' }}>
-              Measurements (optional)
-            </p>
-            <p style={{ margin: '0 0 0.75rem', fontSize: '0.88rem', color: 'var(--muted)' }}>
-              Record sizes for the garments you measure today. You can always edit these later.
-            </p>
-
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-              {GARMENTS.map((gg) => {
-                const on = gg === g
-                return (
-                  <button
-                    key={gg}
-                    type="button"
-                    className={`btn btn-sm ${on ? 'btn-teal' : 'btn-ghost'}`}
-                    onClick={() => setNewActiveGarment(gg)}
+        <form className="order-grid" onSubmit={createCustomer}>
+          <div className="order-main-col" style={{ gridColumn: '1 / -1' }}>
+            <div className="premium-card">
+              <div className="card-header">
+                <div className="header-icon"><User size={20} /></div>
+                <h3>Personal Details</h3>
+              </div>
+              <div className="card-body form-grid">
+                <div className="form-grid two">
+                  <div>
+                    <label>Name <span className="req-star">*</span></label>
+                    <input name="name" type="text" required placeholder="Customer name" />
+                  </div>
+                  <div>
+                    <label>Phone <span className="req-star">*</span></label>
+                    <input name="phone" type="tel" required placeholder="Mobile number" />
+                  </div>
+                </div>
+                <div>
+                  <label>Address</label>
+                  <textarea name="address" placeholder="Optional" style={{ minHeight: '60px' }} />
+                </div>
+                <div>
+                  <label>Default measurement unit</label>
+                  <select
+                    name="preferredUnit"
+                    value={newUnit}
+                    onChange={(e) => {
+                      const v = e.target.value === 'CM' ? 'CM' : 'INCH'
+                      setNewUnit(v)
+                      setNewDraft((prev) => {
+                        const next = { ...prev }
+                        for (const gg of GARMENTS) {
+                          const d = next[gg]
+                          const empty = !d.values || !Object.keys(d.values).some((k) => d.values[k] && String(d.values[k]).trim() !== '')
+                          if (empty) next[gg] = { ...d, unit: v }
+                        }
+                        return next
+                      })
+                    }}
                   >
-                    {gg}
-                  </button>
-                )
-              })}
+                    <option value="INCH">Inches (in)</option>
+                    <option value="CM">Centimetres (cm)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
-            <div className="form-grid">
-              <MeasureEditor
-                garment={g}
-                fields={fields}
-                payload={payload}
-                radioPrefix="nu-"
-                onChange={(next) => setNewDraft((prev) => ({ ...prev, [g]: next }))}
-              />
-              <p style={{ margin: '0.75rem 0 0', fontSize: '0.82rem', color: 'var(--muted)' }}>Optional — add now or later from the customer profile.</p>
+            <div className="premium-card" style={{ marginTop: '1.5rem' }}>
+              <div className="card-header">
+                <div className="header-icon"><Ruler size={20} /></div>
+                <div>
+                  <h3>Measurements <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--muted)' }}>(Optional)</span></h3>
+                </div>
+              </div>
+              <div className="card-body">
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                  {GARMENTS.map((gg) => {
+                    const on = gg === g
+                    return (
+                      <button
+                        key={gg}
+                        type="button"
+                        className={`btn btn-sm ${on ? 'btn-teal' : 'btn-ghost'}`}
+                        onClick={() => setNewActiveGarment(gg)}
+                      >
+                        {gg}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="form-grid">
+                  <MeasureEditor
+                    garment={g}
+                    fields={fields}
+                    payload={payload}
+                    radioPrefix="nu-"
+                    onChange={(next) => setNewDraft((prev) => ({ ...prev, [g]: next }))}
+                  />
+                </div>
+              </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '1.25rem' }} disabled={creatingCustomer}>
-              {creatingCustomer ? 'Saving…' : 'Save customer'}
-            </button>
-          </form>
-        </div>
+            <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+              <button type="submit" className="btn btn-primary" disabled={creatingCustomer} style={{ padding: '0.75rem 2rem', fontSize: '1.05rem' }}>
+                <Save size={18} /> {creatingCustomer ? 'Saving…' : 'Save Customer'}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <style>{`
+          .order-form-premium {
+            --card-bg: var(--bg-card);
+            --card-border: var(--border);
+            --header-bg: var(--bg-elevated);
+          }
+          .premium-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            overflow: hidden;
+          }
+          .card-header {
+            background: var(--header-bg);
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+          }
+          .header-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--bg);
+            border-radius: 8px;
+            color: var(--teal);
+            border: 1px solid var(--card-border);
+          }
+          .card-header h3 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-h);
+            font-family: var(--sans);
+          }
+          .card-body {
+            padding: 1.25rem;
+          }
+        `}</style>
       </div>
     )
   }
@@ -479,135 +540,215 @@ export default memo(function CustomerPage() {
   const fields = activeFields
 
   return (
-    <>
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Details</h2>
+      <div className="order-form-premium" style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div className="panel-header" style={{ marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: '1rem 0 0' }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center' }}><User size={24} style={{ marginRight: '0.5rem' }}/> {customer.serialNumber ? `CUS_${String(customer.serialNumber).padStart(3, '0')}` : 'Customer Details'}</h2>
           <Link className="btn btn-ghost btn-sm" to="/app/customers">
-            Back to list
+            <ChevronLeft size={16} /> Back
           </Link>
         </div>
-        <div style={{ padding: '1.25rem' }}>
-          <form className="form-grid ts-app-form" style={{ maxWidth: 560 }} onSubmit={saveCustomerDetails}>
-            <div className="form-grid two">
-              <div>
-                <label>Name</label>
-                <input name="name" type="text" required defaultValue={customer.name} />
-              </div>
-              <div>
-                <label>Phone</label>
-                <input name="phone" type="tel" required defaultValue={customer.phone} />
-              </div>
-            </div>
-            <div>
-              <label>Address</label>
-              <textarea name="address" defaultValue={customer.address || ''} />
-            </div>
-            <div>
-              <label>Default measurement unit</label>
-              <select name="preferredUnit" defaultValue={pu}>
-                <option value="INCH">Inches (in)</option>
-                <option value="CM">Centimetres (cm)</option>
-              </select>
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={savingDetails}>
-              {savingDetails ? 'Saving…' : 'Save details'}
-            </button>
-          </form>
-        </div>
-      </div>
 
-      <div className="panel">
-        <div className="panel-header">
-          <h2>Saved measurements</h2>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--muted)' }}>
-            Industry-style fields; values use the unit you select per garment.
-          </p>
-        </div>
-        <div style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            {GARMENTS.map((g) => {
-              const on = g === activeGarment
-              return (
-                <button
-                  key={g}
-                  type="button"
-                  className={`btn btn-sm ${on ? 'btn-teal' : 'btn-ghost'}`}
-                  onClick={() => void loadMeasurement(g)}
-                >
-                  {g}
-                </button>
-              )
-            })}
+        <div className="order-grid">
+          <div className="order-main-col">
+            <div className="premium-card">
+              <div className="card-header">
+                <div className="header-icon"><User size={20} /></div>
+                <h3>Personal Details</h3>
+              </div>
+              <div className="card-body">
+                <form className="form-grid" onSubmit={saveCustomerDetails}>
+                  <div className="form-grid two">
+                    <div>
+                      <label>Name</label>
+                      <input name="name" type="text" required defaultValue={customer.name} />
+                    </div>
+                    <div>
+                      <label>Phone</label>
+                      <input name="phone" type="tel" required defaultValue={customer.phone} />
+                    </div>
+                  </div>
+                  <div>
+                    <label>Address</label>
+                    <textarea name="address" defaultValue={customer.address || ''} style={{ minHeight: '60px' }} />
+                  </div>
+                  <div className="form-grid two">
+                    <div>
+                      <label>Default measurement unit</label>
+                      <select name="preferredUnit" defaultValue={pu}>
+                        <option value="INCH">Inches (in)</option>
+                        <option value="CM">Centimetres (cm)</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                      <button type="submit" className="btn btn-primary" disabled={savingDetails} style={{ width: '100%', padding: '0.65rem' }}>
+                        <Save size={16} /> {savingDetails ? 'Saving…' : 'Save Details'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div className="premium-card" style={{ marginTop: '1.5rem' }}>
+              <div className="card-header">
+                <div className="header-icon"><Ruler size={20} /></div>
+                <div>
+                  <h3>Measurements</h3>
+                </div>
+              </div>
+              <div className="card-body">
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                  {GARMENTS.map((g) => {
+                    const on = g === activeGarment
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        className={`btn btn-sm ${on ? 'btn-teal' : 'btn-ghost'}`}
+                        onClick={() => void loadMeasurement(g)}
+                      >
+                        {g}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div id="tab-body" className="ts-app-form">
+                  {activeLoading ? (
+                    <p style={{ color: 'var(--muted)', padding: '2rem 0', textAlign: 'center' }}>Loading measurements…</p>
+                  ) : (
+                    <>
+                      <MeasureEditor garment={activeGarment} fields={fields} payload={activePayload} radioPrefix="u-" onChange={setActivePayload} />
+                      <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          id="saveM"
+                          disabled={savingMeasurements}
+                          onClick={() => void saveMeasurement()}
+                          style={{ padding: '0.65rem 1.5rem' }}
+                        >
+                          <Save size={16} /> {savingMeasurements ? 'Saving…' : `Save ${activeGarment}`}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div id="tab-body" className="ts-app-form" style={{ maxWidth: 720 }}>
-            {activeLoading ? (
-              <p style={{ color: 'var(--muted)' }}>Loading…</p>
-            ) : (
-              <>
-                <MeasureEditor garment={activeGarment} fields={fields} payload={activePayload} radioPrefix="u-" onChange={setActivePayload} />
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  id="saveM"
-                  style={{ marginTop: '1rem' }}
-                  disabled={savingMeasurements}
-                  onClick={() => void saveMeasurement()}
-                >
-                  {savingMeasurements ? 'Saving…' : `Save ${activeGarment}`}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="panel" style={{ marginTop: '1rem' }}>
-        <div className="panel-header">
-          <h2>Order history</h2>
-        </div>
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Garment</th>
-                <th>Delivery</th>
-                <th>Status</th>
-                <th>Total</th>
-                <th>Balance</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(orders || []).length === 0 ? (
-                <tr>
-                  <td colSpan={7}>No orders yet.</td>
-                </tr>
-              ) : (
-                (orders || []).map((o: any) => {
-                  const bal = Number(o.totalAmount) - Number(o.advanceAmount || 0)
-                  return (
-                    <tr key={o.id}>
-                      <td>#{o.serialNumber}</td>
-                      <td>{o.garmentType}</td>
-                      <td>{o.deliveryDate}</td>
-                      <td>{o.status}</td>
-                      <td>₹{Number(o.totalAmount).toFixed(0)}</td>
-                      <td>₹{bal.toFixed(0)}</td>
-                      <td>
-                        <Link to={`/app/order?id=${o.id}`}>View</Link>
-                      </td>
+          <div className="order-side-col">
+            <div className="premium-card">
+              <div className="card-header">
+                <div className="header-icon"><History size={20} /></div>
+                <h3>Order History</h3>
+              </div>
+              <div className="card-body" style={{ padding: 0 }}>
+                <table className="data" style={{ margin: 0, width: '100%' }}>
+                  <thead style={{ background: 'var(--bg)' }}>
+                    <tr>
+                      <th style={{ paddingLeft: '1.25rem' }}>Order</th>
+                      <th>Status</th>
+                      <th style={{ paddingRight: '1.25rem', textAlign: 'right' }}>Total</th>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                  </thead>
+                  <tbody>
+                    {(orders || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={3} style={{ padding: '2rem 1.25rem', textAlign: 'center', color: 'var(--muted)' }}>No orders yet.</td>
+                      </tr>
+                    ) : (
+                      (orders || []).map((o: any) => {
+                        return (
+                          <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/app/order?id=${o.id}`)}>
+                            <td style={{ paddingLeft: '1.25rem' }}>
+                              <div style={{ fontWeight: 600 }}>OD_{String(o.serialNumber).padStart(3, '0')}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{o.garmentType}</div>
+                            </td>
+                            <td>
+                              <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--bg)', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                                {String(o.status).replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td style={{ paddingRight: '1.25rem', textAlign: 'right' }}>₹{Number(o.totalAmount).toFixed(0)}</td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <style>{`
+          .order-form-premium {
+            --card-bg: var(--bg-card);
+            --card-border: var(--border);
+            --header-bg: var(--bg-elevated);
+          }
+
+          .order-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            align-items: start;
+          }
+
+          @media (min-width: 900px) {
+            .order-grid {
+              grid-template-columns: 1fr 380px;
+            }
+          }
+
+          .premium-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            overflow: hidden;
+          }
+
+          .card-header {
+            background: var(--header-bg);
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+          }
+
+          .header-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--bg);
+            border-radius: 8px;
+            color: var(--teal);
+            border: 1px solid var(--card-border);
+          }
+
+          .card-header h3 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-h);
+            font-family: var(--sans);
+          }
+
+          .card-body {
+            padding: 1.25rem;
+          }
+          
+          .data tbody tr:hover {
+            background-color: var(--bg-card-hover);
+          }
+        `}</style>
       </div>
-    </>
   )
 })
 

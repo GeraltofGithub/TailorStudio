@@ -23,8 +23,8 @@ function statusBadgeClass(st: string) {
 }
 
 export default memo(function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [recent, setRecent] = useState<DashboardRecentOrder[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(() => appService.dashboard.summarySync()?.stats || null)
+  const [recent, setRecent] = useState<DashboardRecentOrder[]>(() => appService.dashboard.summarySync()?.recentOrders || [])
 
   const refreshDashboard = useCallback(async () => {
     try {

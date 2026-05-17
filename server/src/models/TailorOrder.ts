@@ -10,6 +10,7 @@ const schema = new Schema(
   {
     businessId: { type: Schema.Types.ObjectId, ref: 'Business', required: true, index: true },
     serialNumber: Number,
+    displayId: String,
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', index: true },
     garmentType: String,
     measurementSnapshotJson: String,

@@ -1,7 +1,16 @@
 import { Customer, TailorOrder } from '../models/index.js'
+import { nextSeq } from '../utils/sequence.js'
 import { parseObjectId } from '../utils/objectId.js'
 import { toApi, toApiList } from '../utils/apiJson.js'
 import { emitCustomersChanged } from '../ws/realtime.js'
+
+function getDdmmyy() {
+  const d = new Date()
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${dd}${mm}${yy}`
+}
 
 function searchFilter(businessId: string, q: string | undefined, activeOnly: boolean) {
   const base: Record<string, unknown> = { businessId: parseObjectId(businessId) }
@@ -11,7 +20,7 @@ function searchFilter(businessId: string, q: string | undefined, activeOnly: boo
   return { ...base, $or: [{ name: re }, { phone: re }] }
 }
 
-const customerListSelect = 'name phone address preferredUnit active createdAt'
+const customerListSelect = 'displayId serialNumber name phone address preferredUnit active createdAt'
 
 export const listCustomers = async (businessId: string, q?: string) =>
   toApiList(
@@ -42,8 +51,13 @@ export const createCustomer = async (
   businessId: string,
   d: { name: string; phone: string; address?: string; preferredUnit?: string },
 ) => {
+  const serial = await nextSeq(`customerSerial:${businessId}`)
+  const displayId = `CUS_${String(serial).padStart(3, '0')}_${getDdmmyy()}`
+  
   const doc = await Customer.create({
     businessId: parseObjectId(businessId),
+    serialNumber: serial,
+    displayId,
     name: d.name,
     phone: d.phone,
     address: d.address || null,

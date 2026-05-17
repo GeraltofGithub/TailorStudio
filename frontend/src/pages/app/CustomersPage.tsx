@@ -13,6 +13,11 @@ type Customer = {
   phone: string
   address?: string | null
   active?: boolean
+  serialNumber?: number
+}
+
+function formatCustomerId(serial?: number) {
+  return serial ? `CUS_${String(serial).padStart(3, '0')}` : '—'
 }
 
 export default memo(function CustomersPage() {
@@ -20,7 +25,7 @@ export default memo(function CustomersPage() {
   const q = sp.get('q') || ''
   const nav = useNavigate()
   const toast = useAppToast()
-  const [list, setList] = useState<Customer[]>([])
+  const [list, setList] = useState<Customer[]>(() => (appService.customers.listSync(q || undefined) || []) as Customer[])
   const [togglingId, setTogglingId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const pageSize = 15
@@ -103,6 +108,7 @@ export default memo(function CustomersPage() {
           <table className="data">
             <thead>
               <tr>
+                <th>ID</th>
                 <th>Name</th>
                 <th>Phone</th>
                 <th>Address</th>
@@ -117,6 +123,7 @@ export default memo(function CustomersPage() {
               ) : (
                 pagedRows.map((c) => (
                   <tr key={c.id} style={{ opacity: c.active === false ? 0.55 : 1 }}>
+                    <td><strong>{formatCustomerId(c.serialNumber)}</strong></td>
                     <td>{c.name}</td>
                     <td>{c.phone}</td>
                     <td>{c.address || '—'}</td>

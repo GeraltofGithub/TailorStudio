@@ -294,6 +294,11 @@ h3 {
 .btn:active {
   transform: scale(0.98);
 }
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
 .btn-primary {
   background: linear-gradient(135deg, #b48c3a, #967028);
   color: #f8f5ec;
@@ -832,6 +837,7 @@ textarea {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .topbar {
@@ -867,9 +873,8 @@ textarea {
 
 .page-content {
   padding: 1.75rem;
-  max-width: 1200px;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
 }
 
 .mobile-nav {
